@@ -11,6 +11,23 @@ def _para_text(para) -> str:
     return para.text.strip()
 
 
+def _get_all_paragraphs(doc):
+    """Return all paragraphs in document order, including table cells."""
+    from docx.text.paragraph import Paragraph
+    result = []
+
+    def _collect(element):
+        for child in element:
+            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            if tag == "p":
+                result.append(Paragraph(child, doc))
+            elif tag in ("tbl", "tc", "tr"):
+                _collect(child)
+
+    _collect(doc.element.body)
+    return result
+
+
 def _is_section_heading(para) -> bool:
     text = _para_text(para)
     if not text or len(text) < 2:
@@ -173,7 +190,7 @@ def _add_experience_bullets(paragraphs, enhancements: list):
 def apply_edits_to_docx(original_bytes: bytes, edits: dict) -> bytes:
     """Apply AI-suggested edits to original DOCX preserving full structure."""
     doc = Document(io.BytesIO(original_bytes))
-    paragraphs = doc.paragraphs
+    paragraphs = _get_all_paragraphs(doc)
 
     if edits.get("updated_summary"):
         _update_summary(paragraphs, edits["updated_summary"])
