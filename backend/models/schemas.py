@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -37,6 +37,13 @@ class ResumeInfo(BaseModel):
 class EditRequest(BaseModel):
     resume_id: str
     job_description: str
+
+    @field_validator("job_description")
+    @classmethod
+    def jd_max_length(cls, v: str) -> str:
+        if len(v) > 1000:
+            raise ValueError("Job description must be 1000 characters or less.")
+        return v
 
 
 class EditResponse(BaseModel):

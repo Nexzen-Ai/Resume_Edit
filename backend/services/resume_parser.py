@@ -1,7 +1,17 @@
 import io
+import re
 from docx import Document
 import PyPDF2
 from typing import Optional
+
+_BOILERPLATE = re.compile(r'(?i)references available upon request\.?\s*')
+
+
+def strip_resume(text: str) -> str:
+    text = _BOILERPLATE.sub('', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = '\n'.join(line.rstrip() for line in text.splitlines())
+    return text.strip()
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:

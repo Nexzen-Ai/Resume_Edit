@@ -24,8 +24,12 @@ export default function LoginPage() {
       });
       router.replace("/dashboard");
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail || "Login failed");
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") || "Login failed");
+      } else {
+        setError((detail as string) || "Login failed");
+      }
     } finally {
       setLoading(false);
     }

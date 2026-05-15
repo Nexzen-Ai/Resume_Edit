@@ -4,15 +4,25 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from models.schemas import EditRequest, EditResponse, JobStatus
 from routers.auth import current_user
-from services.gemini_service import analyze_and_edit_resume
+from services.llm_service import analyze_and_edit_resume
 from services.resume_builder import apply_edits_to_docx
 from database import supabase
+from config import settings
 
 router = APIRouter(prefix="/edit", tags=["edit"])
 
 
 @router.post("/", response_model=EditResponse)
 def start_edit(body: EditRequest, user: dict = Depends(current_user)):
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    count_result = supabase.table("edit_jobs") \
+        .select("id", count="exact") \
+        .eq("user_id", user["id"]) \
+        .gte("created_at", today_start) \
+        .execute()
+    if (count_result.count or 0) >= settings.daily_edit_limit:
+        raise HTTPException(status_code=429, detail=f"Daily limit of {settings.daily_edit_limit} edits reached. Try again tomorrow.")
+
     result = supabase.table("resumes") \
         .select("resume_text, filename, storage_path") \
         .eq("id", body.resume_id) \

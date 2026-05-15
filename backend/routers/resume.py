@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from models.schemas import ResumeUploadResponse, ResumeInfo
 from routers.auth import current_user
-from services.resume_parser import extract_resume_text
+from services.resume_parser import extract_resume_text, strip_resume
 from database import supabase
 
 router = APIRouter(prefix="/resume", tags=["resume"])
@@ -17,6 +17,13 @@ async def upload_resume(
     file: UploadFile = File(...),
     user: dict = Depends(current_user),
 ):
+    existing = supabase.table("resumes").select("id").eq("user_id", user["id"]).execute()
+    if existing.data:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have a resume uploaded. Delete it first before uploading a new one.",
+        )
+
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only PDF and DOCX allowed")
 
@@ -25,7 +32,7 @@ async def upload_resume(
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
 
     try:
-        resume_text = extract_resume_text(content, file.filename)
+        resume_text = strip_resume(extract_resume_text(content, file.filename))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

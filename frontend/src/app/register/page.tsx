@@ -25,8 +25,12 @@ export default function RegisterPage() {
       });
       router.replace("/dashboard");
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail || "Registration failed");
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") || "Registration failed");
+      } else {
+        setError((detail as string) || "Registration failed");
+      }
     } finally {
       setLoading(false);
     }

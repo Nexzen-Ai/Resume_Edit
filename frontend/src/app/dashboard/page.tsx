@@ -48,7 +48,8 @@ export default function Dashboard() {
       setSuccess("Resume uploaded"); setTimeout(() => setSuccess(""), 3000);
       fetchResumes();
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Upload failed");
+      const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(Array.isArray(d) ? d.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") : (d as string) || "Upload failed");
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
@@ -73,7 +74,8 @@ export default function Dashboard() {
       URL.revokeObjectURL(url);
       fetchHistory();
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "AI editing failed. Try again.");
+      const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(Array.isArray(d) ? d.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") : (d as string) || "AI editing failed. Try again.");
     } finally { setEditing(false); }
   }
 
