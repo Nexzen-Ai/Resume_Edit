@@ -218,7 +218,11 @@ def extract_jd_from_images(images: list) -> dict:
 
 _ANALYZE_PROMPT = """You compare a job description against a candidate's resume.
 Return TWO lists as JSON, nothing else:
-1. "will_add_skills": concrete tools/technologies/languages/frameworks/platforms required or implied by the JD that are GENUINELY MISSING from the resume. Real skills only — no vague phrases, no duplicates with the resume, no padding.
+1. "will_add_skills": AIM FOR ~20 concrete tools/technologies/languages/frameworks/platforms to add. Include:
+   - everything required/implied by the JD that is missing from the resume, PLUS
+   - closely-related industry-standard tools commonly used alongside the JD's stack
+     (e.g. for a DevOps/cloud role: Helm, ArgoCD, Jenkins, GitLab CI, GitHub Actions, Prometheus, Grafana, ELK, Vault, Packer, Terragrunt, Nginx, Datadog, YAML, Shell Scripting).
+   Rules: concrete TOOLS ONLY — never vague phrases ("efficient solutions", "automation strategies", "collaboration"). No duplicates with skills already in the resume.
 2. "optional_terms": at least 15 role titles, disciplines, methodologies, and ATS phrases from the JD that are NOT concrete tools (e.g. "DevOps", "SRE", "Infrastructure as Code", "CI/CD", "Agile", "Observability", "Cloud Architecture"). These are optional resume additions the user may opt into.
 Return ONLY: {"will_add_skills": [...], "optional_terms": [...]}"""
 
