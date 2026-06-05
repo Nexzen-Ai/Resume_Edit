@@ -57,8 +57,8 @@ class EditRequest(BaseModel):
     @field_validator("job_description")
     @classmethod
     def jd_max_length(cls, v: str) -> str:
-        if len(v) > 2000:
-            raise ValueError("Job description must be 2000 characters or less.")
+        if len(v) > 3000:
+            raise ValueError("Job description must be 3000 characters or less.")
         return v
 
 

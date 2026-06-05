@@ -8,6 +8,10 @@ import { isLoggedIn, getUser } from "@/lib/auth";
 interface Resume { resume_id: string; filename: string; uploaded_at: string; }
 interface EditJob { id: string; resume_id: string; status: string; created_at: string; added_skills: string[]; keywords_added: string[]; }
 
+const JD_MAX = 3000;
+const safeFileName = (n: string) =>
+  n.replace(/[^A-Za-z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^[._]+|[._]+$/g, "") || "tailored_resume";
+
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ full_name?: string } | null>(null);
@@ -17,6 +21,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<EditJob[]>([]);
   const [selectedResume, setSelectedResume] = useState("");
   const [jd, setJd] = useState("");
+  const [fileName, setFileName] = useState("tailored_resume");
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
@@ -87,7 +92,7 @@ export default function Dashboard() {
       const dl = await api.get(`/edit/${jobId}/download`, { responseType: "blob" });
       const url = URL.createObjectURL(dl.data);
       const a = document.createElement("a");
-      a.href = url; a.download = `tailored_resume_${jobId}.docx`; a.click();
+      a.href = url; a.download = `${safeFileName(fileName)}.docx`; a.click();
       URL.revokeObjectURL(url);
       fetchHistory();
     } catch (err: unknown) {
@@ -254,9 +259,38 @@ export default function Dashboard() {
               onBlur={(e) => e.target.style.borderColor = "var(--border)"}
             />
 
+            {/* JD character counter */}
+            <div className="flex justify-between items-center mt-2 text-xs">
+              <span style={{ color: jd.length > JD_MAX ? "#ff4d6d" : "var(--muted)" }}>
+                {jd.length > JD_MAX
+                  ? `${jd.length - JD_MAX} over the limit`
+                  : `${JD_MAX - jd.length} characters left`}
+              </span>
+              <span style={{ color: jd.length > JD_MAX ? "#ff4d6d" : "var(--muted)" }}>
+                {jd.length} / {JD_MAX}
+              </span>
+            </div>
+
+            {/* File name (rename before download) */}
+            <div className="mt-4">
+              <label className="block text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--muted-light)" }}>
+                Download as
+              </label>
+              <div className="flex items-center rounded-xl overflow-hidden" style={{ background: "#080f22", border: "1px solid var(--border)" }}>
+                <input
+                  value={fileName}
+                  onChange={(e) => setFileName(e.target.value)}
+                  placeholder="tailored_resume"
+                  className="flex-1 px-4 py-2.5 text-sm bg-transparent outline-none"
+                  style={{ color: "var(--foreground)" }}
+                />
+                <span className="px-3 text-sm select-none" style={{ color: "var(--muted)" }}>.docx</span>
+              </div>
+            </div>
+
             <button
               onClick={handleEdit}
-              disabled={editing || !selectedResume || !jd.trim()}
+              disabled={editing || !selectedResume || !jd.trim() || jd.length > JD_MAX}
               className="mt-4 w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
                 background: editing ? "var(--border)" : "linear-gradient(135deg, #00c8ff, #0066ff)",

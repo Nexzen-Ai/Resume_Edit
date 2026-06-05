@@ -4,13 +4,13 @@ from models.schemas import EditRequest, UserRegister
 
 
 def test_jd_within_limit_ok():
-    req = EditRequest(resume_id="r1", job_description="x" * 2000)
-    assert len(req.job_description) == 2000
+    req = EditRequest(resume_id="r1", job_description="x" * 3000)
+    assert len(req.job_description) == 3000
 
 
 def test_jd_over_limit_rejected():
-    with pytest.raises(ValidationError, match="2000 characters"):
-        EditRequest(resume_id="r1", job_description="x" * 2001)
+    with pytest.raises(ValidationError, match="3000 characters"):
+        EditRequest(resume_id="r1", job_description="x" * 3001)
 
 
 def test_short_password_rejected():

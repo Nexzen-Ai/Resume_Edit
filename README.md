@@ -15,7 +15,7 @@ AI-powered resume tailoring app. Upload your resume, paste a job description, ge
 ## How It Works
 
 1. User registers and uploads one resume (DOCX only)
-2. User pastes a job description (max 2000 chars)
+2. User pastes a job description (max 3000 chars)
 3. Backend queues a job and processes it in the background (returns immediately)
 4. LLM returns targeted additions; applied to original DOCX — formatting preserved
 5. Frontend polls job status, then user downloads tailored resume
@@ -112,7 +112,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 | Limit | Value | Configurable |
 |---|---|---|
 | Resumes per account | 1 | No (by design) |
-| Job description length | 2000 chars | `schemas.py` |
+| Job description length | 3000 chars | `schemas.py` |
 | Edits per day | 5 | `DAILY_EDIT_LIMIT` in `.env` |
 | Resume size | 5 MB | `routers/resume.py` |
 
