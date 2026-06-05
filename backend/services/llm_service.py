@@ -216,14 +216,11 @@ def extract_jd_from_images(images: list) -> dict:
             raise
 
 
-_ANALYZE_PROMPT = """You compare a job description against a candidate's resume.
-Base BOTH lists strictly on THIS specific job description's content — never output generic defaults.
+_ANALYZE_PROMPT = """You extract resume-tailoring terms from a JOB DESCRIPTION.
+CRITICAL: the only SOURCE of terms is the JOB DESCRIPTION text. The RESUME is provided ONLY so you can skip skills the candidate already lists. NEVER take any term from the resume — not its skills, not its job titles, not its past roles or domains. If a term is not written in the job description, do not output it.
 Return TWO lists as JSON, nothing else:
-1. "will_add_skills": AIM FOR ~20 concrete tools/technologies/languages/frameworks/platforms relevant to THIS JD. Include:
-   - every tool/tech explicitly named or clearly implied by THIS JD that is missing from the resume, PLUS
-   - closely-related industry-standard tools commonly used alongside the SPECIFIC stack THIS JD describes.
-   Rules: concrete TOOLS ONLY — never vague phrases ("efficient solutions", "automation strategies", "collaboration"). No duplicates with skills already in the resume.
-2. "optional_terms": at least 15 role titles, disciplines, methodologies, and ATS phrases that actually appear in or are directly implied by THIS JD's wording, and are NOT concrete tools. Extract them from the JD text — do not invent generic ones.
+1. "will_add_skills": concrete skills/tools/technologies/methodologies that ACTUALLY APPEAR in the JOB DESCRIPTION text (tools, languages, frameworks, platforms, and technical practices like "Infrastructure as Code", "Configuration Management", "CI/CD", "Containerization", "Orchestration", "Monitoring", "Troubleshooting"). Aim for up to 20, but only terms truly present in the JD. Skip EXACT duplicates already in the resume. Never invent tools and never borrow from the resume's other domains.
+2. "optional_terms": role titles, disciplines, methodologies, and ATS phrases that appear in the JOB DESCRIPTION (at least 15 if present). Must come from the JD wording — never from the resume's job titles or skills.
 Return ONLY: {"will_add_skills": [...], "optional_terms": [...]}"""
 
 
@@ -233,7 +230,11 @@ def analyze_jd_preview(resume_text: str, job_description: str) -> dict:
     jd_trimmed = job_description[:6000]
     resume_trimmed = resume_text[:3000]
 
-    prompt = f"JD:\n{jd_trimmed}\n\nRESUME:\n{resume_trimmed}\n\nReturn the two JSON lists."
+    prompt = (
+        f"JOB DESCRIPTION (the ONLY source of terms):\n{jd_trimmed}\n\n"
+        f"RESUME (use ONLY to skip already-present skills — do NOT take any term from here):\n{resume_trimmed}\n\n"
+        "Return the two JSON lists, extracting strictly from the job description."
+    )
 
     for attempt in range(3):
         try:
