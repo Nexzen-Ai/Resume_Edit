@@ -24,6 +24,7 @@ create table if not exists edit_jobs (
   resume_id uuid references resumes(id) on delete cascade,
   status text not null default 'done',
   storage_path text,
+  error text,
   added_skills jsonb default '[]',
   keywords_added jsonb default '[]',
   created_at timestamptz default now()

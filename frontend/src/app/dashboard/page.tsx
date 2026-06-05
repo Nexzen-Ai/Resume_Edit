@@ -61,16 +61,33 @@ export default function Dashboard() {
     } catch {}
   }
 
+  async function pollJob(jobId: string): Promise<{ status: string; error?: string }> {
+    // Edits run in the background; poll status until done/failed (cap ~90s).
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const s = await api.get(`/edit/${jobId}/status`);
+      if (s.data.status === "done" || s.data.status === "failed") return s.data;
+    }
+    return { status: "failed", error: "Timed out waiting for the tailored resume. Try again." };
+  }
+
   async function handleEdit() {
     if (!selectedResume || !jd.trim()) { setError("Select a resume and paste a job description"); return; }
     setEditing(true); setError("");
     try {
       const res = await api.post("/edit/", { resume_id: selectedResume, job_description: jd });
+      const jobId = res.data.job_id;
+      const job = await pollJob(jobId);
+      if (job.status !== "done") {
+        setError(job.error || "AI editing failed. Try again.");
+        return;
+      }
       setSuccess("Resume tailored! Downloading..."); setTimeout(() => setSuccess(""), 4000);
-      const dl = await api.get(`/edit/${res.data.job_id}/download`, { responseType: "blob" });
+      const dl = await api.get(`/edit/${jobId}/download`, { responseType: "blob" });
       const url = URL.createObjectURL(dl.data);
       const a = document.createElement("a");
-      a.href = url; a.download = `tailored_resume_${res.data.job_id}.docx`; a.click();
+      a.href = url; a.download = `tailored_resume_${jobId}.docx`; a.click();
       URL.revokeObjectURL(url);
       fetchHistory();
     } catch (err: unknown) {

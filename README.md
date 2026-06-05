@@ -16,9 +16,9 @@ AI-powered resume tailoring app. Upload your resume, paste a job description, ge
 
 1. User registers and uploads one resume (DOCX only)
 2. User pastes a job description (max 2000 chars)
-3. Backend sends resume + JD to LLM → returns targeted additions only
-4. Additions applied to original DOCX — formatting preserved
-5. User downloads tailored resume
+3. Backend queues a job and processes it in the background (returns immediately)
+4. LLM returns targeted additions; applied to original DOCX — formatting preserved
+5. Frontend polls job status, then user downloads tailored resume
 
 ## Setup
 
@@ -27,9 +27,10 @@ AI-powered resume tailoring app. Upload your resume, paste a job description, ge
 1. Create project at [supabase.com](https://supabase.com)
 2. Run `backend/supabase_schema.sql` in SQL editor
 3. Run `backend/migrations/create_llm_cache.sql` in SQL editor
-4. Storage → New bucket → `resumes` (private)
-5. Storage → New bucket → `edited-resumes` (private)
-6. Copy: Project URL, anon key, service role key
+4. Run `backend/migrations/enable_rls.sql` (defense-in-depth) and `backend/migrations/add_edit_job_error.sql` (async jobs) — new projects already include these via the schema
+5. Storage → New bucket → `resumes` (private)
+6. Storage → New bucket → `edited-resumes` (private)
+7. Copy: Project URL, anon key, service role key
 
 ### 2. Backend
 
@@ -51,6 +52,15 @@ npm run dev
 # http://localhost:3000
 ```
 
+## Testing
+
+```bash
+cd backend
+python -m pytest tests/ -q
+```
+
+Covers resume parsing, schema validation, and the DOCX edit heuristics (including the no-op detection that prevents returning an unchanged resume).
+
 ## Environment Variables
 
 ### Backend (`backend/.env`)
@@ -70,6 +80,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=3600
 
 # Optional overrides
 DAILY_EDIT_LIMIT=5
+# Comma-separated frontend origins allowed by CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
 
 #### Supported LLM providers (via LiteLLM)
