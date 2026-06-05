@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     supabase_service_key: str
     llm_api_key: str
     llm_model: str = "gemini/gemini-2.0-flash-lite"
+    # Vision-capable model for reading JD screenshots. Swap per provider.
+    vision_model: str = "groq/meta-llama/llama-4-scout-17b-16e-instruct"
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 3600

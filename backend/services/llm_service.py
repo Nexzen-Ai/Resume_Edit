@@ -23,31 +23,32 @@ Experience (important):
 - "company" and "title" must copy the resume text closely so they can be matched.
 Skills quality (important):
 - Add ONLY concrete technologies, tools, languages, frameworks, or platforms. NO vague phrases like "efficient solutions", "automation strategies", "project requirements", "collaboration".
-- Skip anything ALREADY present in the resume — only genuinely missing items. Prefer real skills over padding.
+- Skip anything ALREADY present in the resume — only genuinely missing items.
+- Provide AT LEAST 20 skills (include closely-related tools commonly paired with the JD's stack, only if they plausibly fit the candidate's experience).
 - For each skill group, set "category" to EXACTLY one of the category labels that already exist in the resume's Technical Skills section (copy the text before the colon).
 - Put each skill under its TRUE category: e.g. a frontend framework (Vue, Typescript) under Programming/Frameworks, a datastore under Databases, a cloud/devops tool under Cloud/Infrastructure. Never place a skill under a category it does not belong to.
 Keywords (important):
-- Provide AT LEAST 25 ATS keywords/phrases from the JD.
+- Provide AT LEAST 30 ATS keywords/phrases from the JD.
 - Keywords MUST be DIFFERENT from the skills list — do not just repeat the tools. Include role titles, methodologies, responsibilities, domain terms, certifications, and multi-word phrases from the JD.
 Return only valid JSON — no markdown, no explanation."""
 
 _SCHEMA_FULL = """{
   "updated_summary": "strong 4-6 sentence summary (~450-650 chars) with JD keywords, key skills, and 2-3 real metrics from the resume",
   "skills_to_add": [
-    {"category": "name of the EXISTING resume skills category this best fits (e.g. 'Cloud & Infrastructure')", "skills": ["concrete tool/tech from the JD, missing from the resume"]}
+    {"category": "name of the EXISTING resume skills category this best fits (e.g. 'Cloud & Infrastructure')", "skills": ["20+ concrete tools/tech from the JD, missing from the resume"]}
   ],
   "experience_enhancements": [
     {"company": "exact company name", "title": "exact title", "new_bullets": ["max 2 bullets per job"]}
   ],
-  "keywords_added": ["25+ ATS keywords/phrases from the JD, DIFFERENT from the skills list (role titles, methodologies, domain terms, certifications, phrases)"]
+  "keywords_added": ["30+ ATS keywords/phrases from the JD, DIFFERENT from the skills list (role titles, methodologies, domain terms, certifications, phrases)"]
 }"""
 
 _SCHEMA_SHORT = """{
   "updated_summary": "strong 4-6 sentence summary (~450-650 chars) with JD keywords, key skills, and 2-3 real metrics from the resume",
   "skills_to_add": [
-    {"category": "name of the EXISTING resume skills category this best fits", "skills": ["concrete tool/tech from the JD, missing from the resume"]}
+    {"category": "name of the EXISTING resume skills category this best fits", "skills": ["20+ concrete tools/tech from the JD, missing from the resume"]}
   ],
-  "keywords_added": ["25+ ATS keywords/phrases from the JD, DIFFERENT from the skills list (role titles, methodologies, domain terms, certifications, phrases)"]
+  "keywords_added": ["30+ ATS keywords/phrases from the JD, DIFFERENT from the skills list (role titles, methodologies, domain terms, certifications, phrases)"]
 }"""
 
 
@@ -72,12 +73,14 @@ def _set_cached(key: str, result: dict) -> None:
         pass
 
 
-def analyze_and_edit_resume(resume_text: str, job_description: str) -> dict:
+def analyze_and_edit_resume(resume_text: str, job_description: str, priority_keywords: list = None) -> dict:
     # resume_text already stripped at upload time — just trim length
-    jd_trimmed = job_description[:3000]
+    jd_trimmed = job_description[:6000]
     resume_trimmed = resume_text[:3000]
+    priority_keywords = priority_keywords or []
 
-    key = _cache_key(resume_trimmed, jd_trimmed)
+    # Priority keywords are part of the cache key so different selections re-run.
+    key = _cache_key(resume_trimmed, jd_trimmed + "||" + ",".join(sorted(priority_keywords)))
     cached = _get_cached(key)
     if cached:
         print("[LLM] Cache hit — skipping API call")
@@ -86,9 +89,18 @@ def analyze_and_edit_resume(resume_text: str, job_description: str) -> dict:
     short_resume = len(resume_trimmed) < 500
     schema = _SCHEMA_SHORT if short_resume else _SCHEMA_FULL
 
+    priority_block = ""
+    if priority_keywords:
+        priority_block = (
+            "\nPRIORITY KEYWORDS (must-include — weave EVERY one into the summary, "
+            "add as skills under the right category, and reference in experience bullets):\n"
+            + ", ".join(priority_keywords[:40])
+            + "\n"
+        )
+
     prompt = f"""JD:
 {jd_trimmed}
-
+{priority_block}
 RESUME:
 {resume_trimmed}
 
@@ -135,5 +147,58 @@ company/title must exactly match resume text."""
                 wait = 15 * (attempt + 1)
                 print(f"[LLM] Rate limited, retrying in {wait}s...")
                 time.sleep(wait)
+                continue
+            raise
+
+
+_VISION_PROMPT = """You are reading screenshots of a job description.
+Extract ALL readable text, then identify the most important keywords for resume tailoring.
+Focus on: technologies, tools, languages, frameworks, platforms, methodologies, role titles, and required skills.
+Ignore boilerplate (equal-opportunity statements, benefits, legal/EEO text, veteran/disability forms).
+Return ONLY valid JSON, no markdown:
+{"jd_text": "the full extracted job-description text", "keywords": ["ordered by importance, most relevant first"]}"""
+
+
+def extract_jd_from_images(images: list) -> dict:
+    """Read JD screenshots with a vision model. Returns {jd_text, keywords}.
+
+    images: list of data-URL base64 strings (e.g. 'data:image/png;base64,...').
+    """
+    content = [{"type": "text", "text": "Extract the job description and keywords from these screenshots."}]
+    for img in images[:5]:
+        content.append({"type": "image_url", "image_url": {"url": img}})
+
+    for attempt in range(3):
+        try:
+            response = litellm.completion(
+                model=settings.vision_model,
+                messages=[
+                    {"role": "system", "content": _VISION_PROMPT},
+                    {"role": "user", "content": content},
+                ],
+                max_tokens=2000,
+                temperature=0.2,
+                api_key=settings.llm_api_key,
+                timeout=90,
+            )
+            raw = response.choices[0].message.content.strip()
+            match = re.search(r"\{[\s\S]*\}", raw)
+            if not match:
+                raise ValueError("Vision model returned no JSON block")
+            data = json.loads(match.group())
+            jd_text = (data.get("jd_text") or "").strip()
+            keywords = [k.strip() for k in data.get("keywords", []) if k and k.strip()]
+            # De-dup keywords, preserve order.
+            seen, deduped = set(), []
+            for k in keywords:
+                if k.lower() not in seen:
+                    seen.add(k.lower())
+                    deduped.append(k)
+            return {"jd_text": jd_text, "keywords": deduped}
+        except litellm.Timeout:
+            raise ValueError("Reading the screenshots took too long. Try fewer/smaller images.")
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                time.sleep(15 * (attempt + 1))
                 continue
             raise

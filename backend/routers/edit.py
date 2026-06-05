@@ -1,12 +1,16 @@
 import logging
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import Response
-from models.schemas import EditRequest, EditResponse, JobStatus
+from models.schemas import (
+    EditRequest, EditResponse, JobStatus,
+    ExtractKeywordsRequest, ExtractKeywordsResponse,
+)
 from routers.auth import current_user
-from services.llm_service import analyze_and_edit_resume
+from services.llm_service import analyze_and_edit_resume, extract_jd_from_images
 from services.resume_builder import apply_edits_to_docx
+from ratelimit import limiter
 from database import supabase
 from config import settings
 
@@ -27,7 +31,8 @@ def _fail_job(job_id: str, message: str) -> None:
         logger.exception("Could not mark job %s as failed", job_id)
 
 
-def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str, job_description: str) -> None:
+def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str,
+                  job_description: str, priority_keywords: list = None) -> None:
     """Background worker: download → AI → apply edits → upload. Updates job status."""
     try:
         original_bytes = supabase.storage.from_("resumes").download(storage_path)
@@ -37,7 +42,7 @@ def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str
         return
 
     try:
-        edits = analyze_and_edit_resume(resume_text, job_description)
+        edits = analyze_and_edit_resume(resume_text, job_description, priority_keywords)
     except ValueError as e:
         # Intentional, user-facing message (e.g. AI timeout).
         _fail_job(job_id, str(e))
@@ -113,10 +118,24 @@ def start_edit(body: EditRequest, background_tasks: BackgroundTasks, user: dict 
 
     background_tasks.add_task(
         _process_edit, job_id, user["id"], resume["storage_path"],
-        resume["resume_text"], body.job_description,
+        resume["resume_text"], body.job_description, body.priority_keywords,
     )
 
     return EditResponse(job_id=job_id, status="queued")
+
+
+@router.post("/extract-keywords", response_model=ExtractKeywordsResponse)
+@limiter.limit("10/minute")
+def extract_keywords(request: Request, body: ExtractKeywordsRequest, user: dict = Depends(current_user)):
+    """Read 1-5 JD screenshots with a vision model; return JD text + ranked keywords."""
+    try:
+        result = extract_jd_from_images(body.images)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception:
+        logger.exception("Vision extraction failed for user %s", user["id"])
+        raise HTTPException(status_code=502, detail="Could not read the screenshots. Try clearer images.")
+    return ExtractKeywordsResponse(jd_text=result["jd_text"], keywords=result["keywords"])
 
 
 @router.get("/{job_id}/status", response_model=JobStatus)

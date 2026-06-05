@@ -53,13 +53,35 @@ class ResumeInfo(BaseModel):
 class EditRequest(BaseModel):
     resume_id: str
     job_description: str
+    # Keywords the user marked as priority (e.g. from JD screenshots) — forced
+    # into the summary, skills, and experience bullets for a stronger tailor.
+    priority_keywords: List[str] = []
 
     @field_validator("job_description")
     @classmethod
     def jd_max_length(cls, v: str) -> str:
-        if len(v) > 3000:
-            raise ValueError("Job description must be 3000 characters or less.")
+        if len(v) > 6000:
+            raise ValueError("Job description must be 6000 characters or less.")
         return v
+
+
+class ExtractKeywordsRequest(BaseModel):
+    # Data-URL base64 images (e.g. "data:image/png;base64,..."), 1-5 screenshots.
+    images: List[str]
+
+    @field_validator("images")
+    @classmethod
+    def limit_images(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("At least one screenshot is required.")
+        if len(v) > 5:
+            raise ValueError("Max 5 screenshots.")
+        return v
+
+
+class ExtractKeywordsResponse(BaseModel):
+    jd_text: str
+    keywords: List[str]
 
 
 class EditResponse(BaseModel):

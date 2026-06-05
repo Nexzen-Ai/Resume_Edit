@@ -8,7 +8,8 @@ import { isLoggedIn, getUser } from "@/lib/auth";
 interface Resume { resume_id: string; filename: string; uploaded_at: string; }
 interface EditJob { id: string; resume_id: string; status: string; created_at: string; added_skills: string[]; keywords_added: string[]; }
 
-const JD_MAX = 3000;
+const JD_MAX = 6000;
+const MAX_SHOTS = 5;
 const safeFileName = (n: string) =>
   n.replace(/[^A-Za-z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^[._]+|[._]+$/g, "") || "tailored_resume";
 
@@ -22,6 +23,10 @@ export default function Dashboard() {
   const [selectedResume, setSelectedResume] = useState("");
   const [jd, setJd] = useState("");
   const [fileName, setFileName] = useState("tailored_resume");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [extracting, setExtracting] = useState(false);
+  const shotRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
@@ -66,6 +71,45 @@ export default function Dashboard() {
     } catch {}
   }
 
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleScreenshots(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []).slice(0, MAX_SHOTS);
+    if (!files.length) return;
+    setExtracting(true); setError("");
+    try {
+      const images = await Promise.all(files.map(fileToDataUrl));
+      const res = await api.post("/edit/extract-keywords", { images });
+      if (res.data.jd_text) setJd(res.data.jd_text.slice(0, JD_MAX));
+      const kws: string[] = res.data.keywords || [];
+      setKeywords(kws);
+      setPicked(new Set(kws));   // pre-select all; user can deselect
+      setSuccess(`Extracted ${kws.length} keywords from ${files.length} screenshot(s)`);
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError((d as string) || "Could not read screenshots. Try clearer images.");
+    } finally {
+      setExtracting(false);
+      if (shotRef.current) shotRef.current.value = "";
+    }
+  }
+
+  function toggleKeyword(k: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  }
+
   async function pollJob(jobId: string): Promise<{ status: string; error?: string }> {
     // Edits run in the background; poll status until done/failed (cap ~90s).
     const deadline = Date.now() + 90_000;
@@ -81,7 +125,11 @@ export default function Dashboard() {
     if (!selectedResume || !jd.trim()) { setError("Select a resume and paste a job description"); return; }
     setEditing(true); setError("");
     try {
-      const res = await api.post("/edit/", { resume_id: selectedResume, job_description: jd });
+      const res = await api.post("/edit/", {
+        resume_id: selectedResume,
+        job_description: jd,
+        priority_keywords: Array.from(picked),
+      });
       const jobId = res.data.job_id;
       const job = await pollJob(jobId);
       if (job.status !== "done") {
@@ -241,9 +289,25 @@ export default function Dashboard() {
 
           {/* JD Panel */}
           <div className="p-6 flex flex-col" style={cardStyle}>
-            <div className="mb-5">
-              <h2 className="font-semibold text-white text-sm">Job Description</h2>
-              <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>Paste the full JD — AI extracts skills &amp; keywords</p>
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h2 className="font-semibold text-white text-sm">Job Description</h2>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>Paste the JD, or upload up to {MAX_SHOTS} screenshots</p>
+              </div>
+              <button
+                onClick={() => shotRef.current?.click()}
+                disabled={extracting}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all disabled:opacity-50"
+                style={{ background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(0,200,255,0.2)" }}
+              >
+                {extracting ? (
+                  <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeLinecap="round"/></svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.6-3.6a2 2 0 0 0-2.8 0L6 20"/></svg>
+                )}
+                {extracting ? "Reading..." : "Screenshots"}
+              </button>
+              <input ref={shotRef} type="file" accept="image/*" multiple className="hidden" onChange={handleScreenshots} />
             </div>
             <textarea
               value={jd}
@@ -270,6 +334,34 @@ export default function Dashboard() {
                 {jd.length} / {JD_MAX}
               </span>
             </div>
+
+            {/* Priority keyword chips (from screenshots) — toggle to force into resume */}
+            {keywords.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--muted-light)" }}>
+                  Priority keywords · {picked.size} selected
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                  {keywords.map((k) => {
+                    const on = picked.has(k);
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => toggleKeyword(k)}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium transition-all"
+                        style={{
+                          background: on ? "rgba(0,200,255,0.15)" : "rgba(255,255,255,0.03)",
+                          color: on ? "var(--accent)" : "var(--muted)",
+                          border: `1px solid ${on ? "rgba(0,200,255,0.4)" : "var(--border)"}`,
+                        }}
+                      >
+                        {on ? "✓ " : ""}{k}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* File name (rename before download) */}
             <div className="mt-4">
