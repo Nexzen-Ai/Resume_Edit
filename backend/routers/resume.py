@@ -1,3 +1,5 @@
+import os
+import re
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
@@ -10,6 +12,13 @@ router = APIRouter(prefix="/resume", tags=["resume"])
 
 ALLOWED_TYPES = {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+def _safe_filename(filename: str) -> str:
+    """Strip any path components and unsafe chars to prevent path traversal in storage keys."""
+    base = os.path.basename(filename or "").replace("\\", "/").split("/")[-1]
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base).strip("._") or "resume"
+    return base[:120]
 
 
 @router.post("/upload", response_model=ResumeUploadResponse)
@@ -25,7 +34,7 @@ async def upload_resume(
         )
 
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX allowed")
+        raise HTTPException(status_code=400, detail="Only DOCX (.docx) files are supported")
 
     content = await file.read()
     if len(content) > MAX_SIZE:
@@ -37,7 +46,8 @@ async def upload_resume(
         raise HTTPException(status_code=400, detail=str(e))
 
     resume_id = str(uuid.uuid4())
-    storage_path = f"{user['id']}/{resume_id}/{file.filename}"
+    safe_name = _safe_filename(file.filename)
+    storage_path = f"{user['id']}/{resume_id}/{safe_name}"
 
     # Upload file to Supabase storage
     supabase.storage.from_("resumes").upload(storage_path, content)

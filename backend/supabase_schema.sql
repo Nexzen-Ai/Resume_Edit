@@ -29,10 +29,13 @@ create table if not exists edit_jobs (
   created_at timestamptz default now()
 );
 
--- RLS policies (disable since we use service key)
-alter table users disable row level security;
-alter table resumes disable row level security;
-alter table edit_jobs disable row level security;
+-- RLS: ENABLE with no policies. App talks to Postgres via the service-role key,
+-- which bypasses RLS, so this does not affect the app. But it denies the anon/public
+-- role all access — so a leaked anon key cannot read these tables. Defense-in-depth.
+alter table users enable row level security;
+alter table resumes enable row level security;
+alter table edit_jobs enable row level security;
+-- (intentionally no CREATE POLICY statements: anon = fully denied, service key = full access)
 
 -- Storage buckets (run in Supabase dashboard > Storage > New bucket)
 -- Bucket name: resumes        (private)

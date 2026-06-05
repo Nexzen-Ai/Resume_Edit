@@ -9,8 +9,14 @@ class Settings(BaseSettings):
     llm_model: str = "gemini/gemini-2.0-flash-lite"
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 10080
+    access_token_expire_minutes: int = 3600
     daily_edit_limit: int = 5
+    # Comma-separated allowed CORS origins (frontend URLs).
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     class Config:
         env_file = ".env"

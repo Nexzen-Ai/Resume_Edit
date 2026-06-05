@@ -85,11 +85,11 @@ def _insert_para_after(ref_para, text: str):
     ref_para._element.addnext(new_p)
 
 
-def _update_summary(paragraphs, new_text: str):
-    """Replace profile summary paragraph text."""
+def _update_summary(paragraphs, new_text: str) -> bool:
+    """Replace profile summary paragraph text. Returns True if applied."""
     heading_idx = _find_section(paragraphs, "PROFILE SUMMARY", "SUMMARY", "PROFESSIONAL SUMMARY")
     if heading_idx is None:
-        return
+        return False
 
     start, end = _section_content_range(paragraphs, heading_idx)
     for i in range(start, end):
@@ -103,17 +103,18 @@ def _update_summary(paragraphs, new_text: str):
                     run.text = ""
             else:
                 p.add_run(new_text)
-            break
+            return True
+    return False
 
 
-def _add_skills(paragraphs, skills: list):
-    """Append new skills directly to the last bullet in Technical Skills section."""
+def _add_skills(paragraphs, skills: list) -> bool:
+    """Append new skills directly to the last bullet in Technical Skills section. Returns True if applied."""
     if not skills:
-        return
+        return False
 
     heading_idx = _find_section(paragraphs, "TECHNICAL SKILLS", "SKILLS")
     if heading_idx is None:
-        return
+        return False
 
     start, end = _section_content_range(paragraphs, heading_idx)
 
@@ -125,7 +126,7 @@ def _add_skills(paragraphs, skills: list):
             break
 
     if last_para is None:
-        return
+        return False
 
     # Append skills inline to the last skill bullet
     runs = last_para.runs
@@ -134,20 +135,22 @@ def _add_skills(paragraphs, skills: list):
         runs[-1].text = runs[-1].text.rstrip() + ", " + appended
     else:
         last_para.add_run(", " + appended)
+    return True
 
 
-def _add_experience_bullets(paragraphs, enhancements: list):
-    """Add new bullet points to specified jobs in experience section."""
+def _add_experience_bullets(paragraphs, enhancements: list) -> int:
+    """Add new bullet points to specified jobs in experience section. Returns count of jobs enhanced."""
     if not enhancements:
-        return
+        return 0
 
     exp_heading_idx = _find_section(paragraphs, "PROFESSIONAL EXPERIENCE", "WORK EXPERIENCE", "EXPERIENCE")
     if exp_heading_idx is None:
-        return
+        return 0
 
     exp_start, exp_end = _section_content_range(paragraphs, exp_heading_idx)
     exp_paras = paragraphs[exp_start:exp_end]
 
+    applied = 0
     for enh in enhancements:
         company = enh.get("company", "").lower()
         new_bullets = enh.get("new_bullets", [])
@@ -185,23 +188,36 @@ def _add_experience_bullets(paragraphs, enhancements: list):
         # Insert new bullets after last existing bullet
         for bullet_text in reversed(new_bullets):
             _insert_para_after(last_bullet_para, f"● {bullet_text}")
+        applied += 1
+
+    return applied
 
 
-def apply_edits_to_docx(original_bytes: bytes, edits: dict) -> bytes:
-    """Apply AI-suggested edits to original DOCX preserving full structure."""
+def apply_edits_to_docx(original_bytes: bytes, edits: dict) -> tuple[bytes, dict]:
+    """Apply AI-suggested edits to original DOCX preserving full structure.
+
+    Returns (docx_bytes, report). report has booleans/counts so callers can
+    detect when section heuristics failed to match anything (silent no-op).
+    """
     doc = Document(io.BytesIO(original_bytes))
     paragraphs = _get_all_paragraphs(doc)
 
+    report = {"summary_updated": False, "skills_added": False, "jobs_enhanced": 0}
+
     if edits.get("updated_summary"):
-        _update_summary(paragraphs, edits["updated_summary"])
+        report["summary_updated"] = _update_summary(paragraphs, edits["updated_summary"])
 
     if edits.get("skills_to_add"):
-        _add_skills(paragraphs, edits["skills_to_add"])
+        report["skills_added"] = _add_skills(paragraphs, edits["skills_to_add"])
 
     if edits.get("experience_enhancements"):
-        _add_experience_bullets(paragraphs, edits["experience_enhancements"])
+        report["jobs_enhanced"] = _add_experience_bullets(paragraphs, edits["experience_enhancements"])
+
+    report["any_applied"] = (
+        report["summary_updated"] or report["skills_added"] or report["jobs_enhanced"] > 0
+    )
 
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
-    return buf.read()
+    return buf.read(), report

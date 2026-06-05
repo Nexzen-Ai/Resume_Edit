@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
@@ -10,6 +11,7 @@ from database import supabase
 from config import settings
 
 router = APIRouter(prefix="/edit", tags=["edit"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=EditResponse)
@@ -40,20 +42,36 @@ def start_edit(body: EditRequest, user: dict = Depends(current_user)):
     # Download original file bytes
     try:
         original_bytes = supabase.storage.from_("resumes").download(resume["storage_path"])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not fetch original resume: {str(e)}")
+    except Exception:
+        logger.exception("Failed to download original resume %s", resume["storage_path"])
+        raise HTTPException(status_code=502, detail="Could not fetch your original resume. Please try again.")
 
     # AI analysis — returns minimal edits only
     try:
         edits = analyze_and_edit_resume(resume["resume_text"], body.job_description)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
+    except ValueError as e:
+        # Intentional, user-facing message (e.g. AI timeout).
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception:
+        logger.exception("AI analysis failed for user %s", user["id"])
+        raise HTTPException(status_code=502, detail="AI processing failed. Please try again in a moment.")
 
     # Apply edits to original DOCX — preserves all structure/formatting
     try:
-        docx_bytes = apply_edits_to_docx(original_bytes, edits)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Resume editing failed: {str(e)}")
+        docx_bytes, report = apply_edits_to_docx(original_bytes, edits)
+    except Exception:
+        logger.exception("DOCX edit failed for user %s", user["id"])
+        raise HTTPException(status_code=500, detail="Failed to apply edits to your resume.")
+
+    # Section heuristics matched nothing — output would be identical to input.
+    # Fail loudly instead of handing back an unchanged resume.
+    if not report["any_applied"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not locate Summary/Skills/Experience sections in this resume's format. "
+                   "Ensure standard section headings (e.g. 'PROFESSIONAL SUMMARY', 'TECHNICAL SKILLS', "
+                   "'PROFESSIONAL EXPERIENCE') and try again.",
+        )
 
     job_id = str(uuid.uuid4())
     storage_path = f"{user['id']}/edited/{job_id}.docx"

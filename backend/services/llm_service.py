@@ -6,23 +6,27 @@ import litellm
 from database import supabase
 from config import settings
 
-_SYSTEM_PROMPT = """You are an expert resume editor. Identify what to ADD to a resume based on a job description.
-Rules: DO NOT restructure/reformat/rewrite. DO NOT change section names or order. No fabrication.
+_SYSTEM_PROMPT = """You are an expert resume editor. Identify relevant content to ADD to a resume based on a job description the candidate is targeting.
+Rules:
+- DO NOT restructure/reformat/rewrite. DO NOT change section names or order.
+- Only add skills, keywords, and bullets RELEVANT to the candidate's existing roles and the JD.
+- Stay grounded: never invent employers, job titles, dates, degrees, or metrics not implied by the resume.
+- New bullets must plausibly fit the existing role they attach to.
 Return only valid JSON — no markdown, no explanation."""
 
 _SCHEMA_FULL = """{
   "updated_summary": "rewritten summary with JD keywords, same length",
-  "skills_to_add": ["max 10 skills from JD missing in resume"],
+  "skills_to_add": ["max 15 skills from JD missing in resume"],
   "experience_enhancements": [
     {"company": "exact company name", "title": "exact title", "new_bullets": ["max 2 bullets per job"]}
   ],
-  "keywords_added": ["top 10 keywords added"]
+  "keywords_added": ["top 15 keywords added"]
 }"""
 
 _SCHEMA_SHORT = """{
   "updated_summary": "rewritten summary with JD keywords, same length",
-  "skills_to_add": ["max 10 skills from JD missing in resume"],
-  "keywords_added": ["top 10 keywords added"]
+  "skills_to_add": ["max 15 skills from JD missing in resume"],
+  "keywords_added": ["top 15 keywords added"]
 }"""
 
 
@@ -49,8 +53,8 @@ def _set_cached(key: str, result: dict) -> None:
 
 def analyze_and_edit_resume(resume_text: str, job_description: str) -> dict:
     # resume_text already stripped at upload time — just trim length
-    jd_trimmed = job_description[:1000]
-    resume_trimmed = resume_text[:2000]
+    jd_trimmed = job_description[:2000]
+    resume_trimmed = resume_text[:3000]
 
     key = _cache_key(resume_trimmed, jd_trimmed)
     cached = _get_cached(key)
@@ -79,9 +83,10 @@ company/title must exactly match resume text."""
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=600,
+                max_tokens=1000,
                 temperature=0.3,
                 api_key=settings.llm_api_key,
+                timeout=60,
             )
             raw = response.choices[0].message.content.strip()
             match = re.search(r"\{[\s\S]*\}", raw)
@@ -92,6 +97,8 @@ company/title must exactly match resume text."""
             result.setdefault("experience_enhancements", [])
             _set_cached(key, result)
             return result
+        except litellm.Timeout:
+            raise ValueError("AI took too long to respond (>60s). Try again.")
         except Exception as e:
             if "429" in str(e) and attempt < 2:
                 wait = 15 * (attempt + 1)

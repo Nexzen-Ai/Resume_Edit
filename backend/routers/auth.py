@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.schemas import UserRegister, UserLogin, TokenResponse
 from services.auth_service import register_user, login_user, get_current_user
+from ratelimit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer()
@@ -15,7 +16,8 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) ->
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(body: UserRegister):
+@limiter.limit("5/minute")
+def register(request: Request, body: UserRegister):
     try:
         result = register_user(body.email, body.password, body.full_name)
         return TokenResponse(**result)
@@ -24,7 +26,8 @@ def register(body: UserRegister):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: UserLogin):
+@limiter.limit("10/minute")
+def login(request: Request, body: UserLogin):
     try:
         result = login_user(body.email, body.password)
         return TokenResponse(**result)

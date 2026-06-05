@@ -8,6 +8,22 @@ class UserRegister(BaseModel):
     password: str
     full_name: str
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        if len(v) > 128:
+            raise ValueError("Password too long (max 128 characters).")
+        return v
+
+    @field_validator("full_name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Full name is required.")
+        return v.strip()
+
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -41,8 +57,8 @@ class EditRequest(BaseModel):
     @field_validator("job_description")
     @classmethod
     def jd_max_length(cls, v: str) -> str:
-        if len(v) > 1000:
-            raise ValueError("Job description must be 1000 characters or less.")
+        if len(v) > 2000:
+            raise ValueError("Job description must be 2000 characters or less.")
         return v
 
 
