@@ -6,9 +6,10 @@ from fastapi.responses import Response
 from models.schemas import (
     EditRequest, EditResponse, JobStatus,
     ExtractKeywordsRequest, ExtractKeywordsResponse,
+    AnalyzeRequest, AnalyzeResponse,
 )
 from routers.auth import current_user
-from services.llm_service import analyze_and_edit_resume, extract_jd_from_images
+from services.llm_service import analyze_and_edit_resume, extract_jd_from_images, analyze_jd_preview
 from services.resume_builder import apply_edits_to_docx
 from ratelimit import limiter
 from database import supabase
@@ -32,7 +33,8 @@ def _fail_job(job_id: str, message: str) -> None:
 
 
 def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str,
-                  job_description: str, priority_keywords: list = None) -> None:
+                  job_description: str, priority_keywords: list = None,
+                  selected_skills: list = None) -> None:
     """Background worker: download → AI → apply edits → upload. Updates job status."""
     try:
         original_bytes = supabase.storage.from_("resumes").download(storage_path)
@@ -42,7 +44,7 @@ def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str
         return
 
     try:
-        edits = analyze_and_edit_resume(resume_text, job_description, priority_keywords)
+        edits = analyze_and_edit_resume(resume_text, job_description, priority_keywords, selected_skills)
     except ValueError as e:
         # Intentional, user-facing message (e.g. AI timeout).
         _fail_job(job_id, str(e))
@@ -118,10 +120,38 @@ def start_edit(body: EditRequest, background_tasks: BackgroundTasks, user: dict 
 
     background_tasks.add_task(
         _process_edit, job_id, user["id"], resume["storage_path"],
-        resume["resume_text"], body.job_description, body.priority_keywords,
+        resume["resume_text"], body.job_description,
+        body.priority_keywords, body.selected_skills,
     )
 
     return EditResponse(job_id=job_id, status="queued")
+
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+@limiter.limit("15/minute")
+def analyze_jd(request: Request, body: AnalyzeRequest, user: dict = Depends(current_user)):
+    """Preview a tailor: concrete skills that will be added (Block A) and
+    optional role/discipline terms to opt into (Block B)."""
+    result = supabase.table("resumes") \
+        .select("resume_text") \
+        .eq("id", body.resume_id) \
+        .eq("user_id", user["id"]) \
+        .execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    try:
+        preview = analyze_jd_preview(result.data[0]["resume_text"], body.job_description)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception:
+        logger.exception("JD analysis failed for user %s", user["id"])
+        raise HTTPException(status_code=502, detail="Could not analyze the JD. Please try again.")
+
+    return AnalyzeResponse(
+        will_add_skills=preview["will_add_skills"],
+        optional_terms=preview["optional_terms"],
+    )
 
 
 @router.post("/extract-keywords", response_model=ExtractKeywordsResponse)

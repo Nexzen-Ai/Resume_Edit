@@ -73,14 +73,17 @@ def _set_cached(key: str, result: dict) -> None:
         pass
 
 
-def analyze_and_edit_resume(resume_text: str, job_description: str, priority_keywords: list = None) -> dict:
+def analyze_and_edit_resume(resume_text: str, job_description: str,
+                            priority_keywords: list = None, selected_skills: list = None) -> dict:
     # resume_text already stripped at upload time — just trim length
     jd_trimmed = job_description[:6000]
     resume_trimmed = resume_text[:3000]
     priority_keywords = priority_keywords or []
+    selected_skills = selected_skills or []
 
-    # Priority keywords are part of the cache key so different selections re-run.
-    key = _cache_key(resume_trimmed, jd_trimmed + "||" + ",".join(sorted(priority_keywords)))
+    # Selections are part of the cache key so different choices re-run.
+    sel_sig = ",".join(sorted(priority_keywords)) + "|" + ",".join(sorted(selected_skills))
+    key = _cache_key(resume_trimmed, jd_trimmed + "||" + sel_sig)
     cached = _get_cached(key)
     if cached:
         print("[LLM] Cache hit — skipping API call")
@@ -98,9 +101,18 @@ def analyze_and_edit_resume(resume_text: str, job_description: str, priority_key
             + "\n"
         )
 
+    skills_block = ""
+    if selected_skills:
+        skills_block = (
+            "\nSKILLS TO ADD (use EXACTLY these — do not add others; categorize each "
+            "under the correct existing resume category):\n"
+            + ", ".join(selected_skills[:40])
+            + "\n"
+        )
+
     prompt = f"""JD:
 {jd_trimmed}
-{priority_block}
+{priority_block}{skills_block}
 RESUME:
 {resume_trimmed}
 
@@ -197,6 +209,63 @@ def extract_jd_from_images(images: list) -> dict:
             return {"jd_text": jd_text, "keywords": deduped}
         except litellm.Timeout:
             raise ValueError("Reading the screenshots took too long. Try fewer/smaller images.")
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                time.sleep(15 * (attempt + 1))
+                continue
+            raise
+
+
+_ANALYZE_PROMPT = """You compare a job description against a candidate's resume.
+Return TWO lists as JSON, nothing else:
+1. "will_add_skills": concrete tools/technologies/languages/frameworks/platforms required or implied by the JD that are GENUINELY MISSING from the resume. Real skills only — no vague phrases, no duplicates with the resume, no padding.
+2. "optional_terms": at least 15 role titles, disciplines, methodologies, and ATS phrases from the JD that are NOT concrete tools (e.g. "DevOps", "SRE", "Infrastructure as Code", "CI/CD", "Agile", "Observability", "Cloud Architecture"). These are optional resume additions the user may opt into.
+Return ONLY: {"will_add_skills": [...], "optional_terms": [...]}"""
+
+
+def analyze_jd_preview(resume_text: str, job_description: str) -> dict:
+    """Preview what a tailor would add: concrete missing skills (Block A) and
+    optional role/discipline terms (Block B, >=15). Returns both lists."""
+    jd_trimmed = job_description[:6000]
+    resume_trimmed = resume_text[:3000]
+
+    prompt = f"JD:\n{jd_trimmed}\n\nRESUME:\n{resume_trimmed}\n\nReturn the two JSON lists."
+
+    for attempt in range(3):
+        try:
+            response = litellm.completion(
+                model=settings.llm_model,
+                messages=[
+                    {"role": "system", "content": _ANALYZE_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=900,
+                temperature=0.2,
+                api_key=settings.llm_api_key,
+                timeout=60,
+            )
+            raw = response.choices[0].message.content.strip()
+            match = re.search(r"\{[\s\S]*\}", raw)
+            if not match:
+                raise ValueError("Analyzer returned no JSON block")
+            data = json.loads(match.group())
+
+            def _clean(items):
+                seen, out = set(), []
+                for s in items or []:
+                    s = (s or "").strip()
+                    if s and s.lower() not in seen:
+                        seen.add(s.lower())
+                        out.append(s)
+                return out
+
+            skills = _clean(data.get("will_add_skills"))
+            # Optional terms must not duplicate the skills list.
+            skills_lower = {s.lower() for s in skills}
+            optional = [t for t in _clean(data.get("optional_terms")) if t.lower() not in skills_lower]
+            return {"will_add_skills": skills, "optional_terms": optional}
+        except litellm.Timeout:
+            raise ValueError("Analysis took too long. Try again.")
         except Exception as e:
             if "429" in str(e) and attempt < 2:
                 time.sleep(15 * (attempt + 1))

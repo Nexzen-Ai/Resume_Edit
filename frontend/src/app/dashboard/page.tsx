@@ -23,10 +23,15 @@ export default function Dashboard() {
   const [selectedResume, setSelectedResume] = useState("");
   const [jd, setJd] = useState("");
   const [fileName, setFileName] = useState("tailored_resume");
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [extracting, setExtracting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const shotRef = useRef<HTMLInputElement>(null);
+  // Block A: concrete skills that will be added (deselectable, default all on)
+  const [willSkills, setWillSkills] = useState<string[]>([]);
+  const [skillSel, setSkillSel] = useState<Set<string>>(new Set());
+  // Block B: optional role/discipline terms to opt into (default off)
+  const [optTerms, setOptTerms] = useState<string[]>([]);
+  const [optSel, setOptSel] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
@@ -88,10 +93,7 @@ export default function Dashboard() {
       const images = await Promise.all(files.map(fileToDataUrl));
       const res = await api.post("/edit/extract-keywords", { images });
       if (res.data.jd_text) setJd(res.data.jd_text.slice(0, JD_MAX));
-      const kws: string[] = res.data.keywords || [];
-      setKeywords(kws);
-      setPicked(new Set(kws));   // pre-select all; user can deselect
-      setSuccess(`Extracted ${kws.length} keywords from ${files.length} screenshot(s)`);
+      setSuccess(`Read ${files.length} screenshot(s). Now click Analyze.`);
       setTimeout(() => setSuccess(""), 4000);
     } catch (err: unknown) {
       const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -102,10 +104,30 @@ export default function Dashboard() {
     }
   }
 
-  function toggleKeyword(k: string) {
-    setPicked((prev) => {
+  async function handleAnalyze() {
+    if (!selectedResume || !jd.trim()) { setError("Select a resume and add a job description"); return; }
+    if (jd.length > JD_MAX) { setError("Job description is over the limit"); return; }
+    setAnalyzing(true); setError("");
+    try {
+      const res = await api.post("/edit/analyze", { resume_id: selectedResume, job_description: jd });
+      const skills: string[] = res.data.will_add_skills || [];
+      const terms: string[] = res.data.optional_terms || [];
+      setWillSkills(skills);
+      setSkillSel(new Set(skills));   // all on by default (deselectable)
+      setOptTerms(terms);
+      setOptSel(new Set());           // optional, off by default
+      setSuccess(`Found ${skills.length} skills + ${terms.length} optional terms`);
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError((d as string) || "Analysis failed. Try again.");
+    } finally { setAnalyzing(false); }
+  }
+
+  function toggleFrom(setFn: React.Dispatch<React.SetStateAction<Set<string>>>, v: string) {
+    setFn((prev) => {
       const next = new Set(prev);
-      if (next.has(k)) next.delete(k); else next.add(k);
+      if (next.has(v)) next.delete(v); else next.add(v);
       return next;
     });
   }
@@ -128,7 +150,8 @@ export default function Dashboard() {
       const res = await api.post("/edit/", {
         resume_id: selectedResume,
         job_description: jd,
-        priority_keywords: Array.from(picked),
+        selected_skills: Array.from(skillSel),
+        priority_keywords: Array.from(optSel),
       });
       const jobId = res.data.job_id;
       const job = await pollJob(jobId);
@@ -335,26 +358,69 @@ export default function Dashboard() {
               </span>
             </div>
 
-            {/* Priority keyword chips (from screenshots) — toggle to force into resume */}
-            {keywords.length > 0 && (
+            {/* Analyze JD → preview what will be added */}
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing || !selectedResume || !jd.trim() || jd.length > JD_MAX}
+              className="mt-4 w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+              style={{ background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(0,200,255,0.25)" }}
+            >
+              {analyzing ? (
+                <><svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeLinecap="round"/></svg>Analyzing...</>
+              ) : "Analyze JD"}
+            </button>
+
+            {/* Block A — skills that WILL be added (deselectable) */}
+            {willSkills.length > 0 && (
               <div className="mt-4">
-                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--muted-light)" }}>
-                  Priority keywords · {picked.size} selected
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--success)" }}>
+                  Will be added · {skillSel.size}/{willSkills.length}
                 </p>
-                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                  {keywords.map((k) => {
-                    const on = picked.has(k);
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {willSkills.map((k) => {
+                    const on = skillSel.has(k);
                     return (
-                      <button
-                        key={k}
-                        onClick={() => toggleKeyword(k)}
+                      <button key={k} onClick={() => toggleFrom(setSkillSel, k)}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium transition-all"
+                        style={{
+                          background: on ? "rgba(0,229,160,0.15)" : "rgba(255,255,255,0.03)",
+                          color: on ? "var(--success)" : "var(--muted)",
+                          border: `1px solid ${on ? "rgba(0,229,160,0.4)" : "var(--border)"}`,
+                        }}>
+                        {on ? "✓ " : ""}{k}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Block B — optional role/discipline terms (opt-in, select all) */}
+            {optTerms.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--muted-light)" }}>
+                    Optional extras · {optSel.size} selected
+                  </p>
+                  <button
+                    onClick={() => setOptSel(optSel.size === optTerms.length ? new Set() : new Set(optTerms))}
+                    className="text-xs font-semibold transition-colors"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {optSel.size === optTerms.length ? "Clear all" : "Select all"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {optTerms.map((k) => {
+                    const on = optSel.has(k);
+                    return (
+                      <button key={k} onClick={() => toggleFrom(setOptSel, k)}
                         className="text-xs px-2.5 py-1 rounded-full font-medium transition-all"
                         style={{
                           background: on ? "rgba(0,200,255,0.15)" : "rgba(255,255,255,0.03)",
                           color: on ? "var(--accent)" : "var(--muted)",
                           border: `1px solid ${on ? "rgba(0,200,255,0.4)" : "var(--border)"}`,
-                        }}
-                      >
+                        }}>
                         {on ? "✓ " : ""}{k}
                       </button>
                     );

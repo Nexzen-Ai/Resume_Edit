@@ -50,19 +50,43 @@ class ResumeInfo(BaseModel):
     uploaded_at: str
 
 
+def _check_jd_len(v: str) -> str:
+    if len(v) > 6000:
+        raise ValueError("Job description must be 6000 characters or less.")
+    return v
+
+
 class EditRequest(BaseModel):
     resume_id: str
     job_description: str
-    # Keywords the user marked as priority (e.g. from JD screenshots) — forced
-    # into the summary, skills, and experience bullets for a stronger tailor.
+    # Block A: concrete skills the user kept from the analyze preview. If set,
+    # only these are added (instead of the model re-deciding).
+    selected_skills: List[str] = []
+    # Block B: optional role/discipline terms the user opted in — forced into
+    # the summary, skills, and experience bullets for a stronger tailor.
     priority_keywords: List[str] = []
 
     @field_validator("job_description")
     @classmethod
     def jd_max_length(cls, v: str) -> str:
-        if len(v) > 6000:
-            raise ValueError("Job description must be 6000 characters or less.")
-        return v
+        return _check_jd_len(v)
+
+
+class AnalyzeRequest(BaseModel):
+    resume_id: str
+    job_description: str
+
+    @field_validator("job_description")
+    @classmethod
+    def jd_max_length(cls, v: str) -> str:
+        return _check_jd_len(v)
+
+
+class AnalyzeResponse(BaseModel):
+    # Block A: concrete skills that will be inserted into the resume (deselectable).
+    will_add_skills: List[str]
+    # Block B: optional role/discipline/ATS terms to opt into (min ~15).
+    optional_terms: List[str]
 
 
 class ExtractKeywordsRequest(BaseModel):
