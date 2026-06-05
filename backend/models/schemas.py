@@ -38,6 +38,11 @@ class TokenResponse(BaseModel):
     full_name: str
 
 
+class RegisterResponse(BaseModel):
+    message: str
+    email: str
+
+
 class ResumeUploadResponse(BaseModel):
     resume_id: str
     filename: str

@@ -4,6 +4,8 @@ create table if not exists users (
   email text unique not null,
   password_hash text not null,
   full_name text not null,
+  email_verified boolean not null default false,
+  verification_token text,
   created_at timestamptz default now()
 );
 

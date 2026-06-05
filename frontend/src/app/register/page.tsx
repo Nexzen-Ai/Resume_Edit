@@ -1,29 +1,22 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
-import { saveAuth } from "@/lib/auth";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "", full_name: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError("");
-    if (form.password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    if (form.password.length < 8) { setError("Password must be at least 8 characters"); return; }
     setLoading(true);
     try {
-      const res = await api.post("/auth/register", form);
-      saveAuth(res.data.access_token, {
-        user_id: res.data.user_id,
-        email: res.data.email,
-        full_name: res.data.full_name,
-      });
-      router.replace("/dashboard");
+      await api.post("/auth/register", form);
+      setDone(true);   // verification email sent — no auto-login
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       if (Array.isArray(detail)) {
@@ -78,6 +71,20 @@ export default function RegisterPage() {
           <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--foreground)" }}>Create account</h1>
           <p className="text-sm mb-7" style={{ color: "var(--muted-light)" }}>Start tailoring your resume with AI</p>
 
+          {done ? (
+            <div className="space-y-5">
+              <div className="p-4 rounded-xl text-sm border" style={{
+                background: "rgba(0,229,160,0.08)", borderColor: "rgba(0,229,160,0.25)", color: "var(--success)",
+              }}>
+                Account created. We sent a verification link to <b>{form.email}</b>. Click it, then sign in.
+              </div>
+              <Link href="/login" className="block text-center w-full py-3 rounded-xl text-sm font-semibold"
+                style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)", color: "#fff" }}>
+                Go to Sign in
+              </Link>
+            </div>
+          ) : (
+          <>
           {error && (
             <div className="mb-5 p-3 rounded-xl text-sm border" style={{
               background: "rgba(255,77,109,0.1)",
@@ -92,7 +99,7 @@ export default function RegisterPage() {
             {[
               { label: "Full Name", key: "full_name", type: "text", placeholder: "John Doe" },
               { label: "Email", key: "email", type: "email", placeholder: "you@example.com" },
-              { label: "Password", key: "password", type: "password", placeholder: "Min 6 characters" },
+              { label: "Password", key: "password", type: "password", placeholder: "Min 8 characters" },
             ].map(({ label, key, type, placeholder }) => (
               <div key={key}>
                 <label className="block text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--muted-light)" }}>{label}</label>
@@ -122,6 +129,8 @@ export default function RegisterPage() {
               {loading ? "Creating account..." : "Create Account →"}
             </button>
           </form>
+          </>
+          )}
 
           <div className="mt-6 pt-6 border-t text-center" style={{ borderColor: "var(--border)" }}>
             <p className="text-sm" style={{ color: "var(--muted)" }}>

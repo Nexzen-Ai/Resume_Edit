@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
@@ -40,20 +41,31 @@ def register_user(email: str, password: str, full_name: str) -> dict:
         raise ValueError("Email already registered")
 
     hashed = hash_password(password)
-    result = supabase.table("users").insert({
+    token = str(uuid.uuid4())
+    supabase.table("users").insert({
         "email": email,
         "password_hash": hashed,
         "full_name": full_name,
+        "email_verified": False,
+        "verification_token": token,
     }).execute()
 
-    user = result.data[0]
-    token = create_access_token({"sub": user["id"], "email": email})
-    return {
-        "access_token": token,
-        "user_id": user["id"],
-        "email": email,
-        "full_name": full_name,
-    }
+    # No access token yet — the user must verify their email before logging in.
+    return {"email": email, "full_name": full_name, "verification_token": token}
+
+
+def verify_email_token(token: str) -> bool:
+    """Mark the matching account verified. Returns True if a token matched."""
+    if not token:
+        return False
+    result = supabase.table("users").select("id").eq("verification_token", token).execute()
+    if not result.data:
+        return False
+    supabase.table("users").update({
+        "email_verified": True,
+        "verification_token": None,
+    }).eq("id", result.data[0]["id"]).execute()
+    return True
 
 
 def login_user(email: str, password: str) -> dict:
@@ -64,6 +76,9 @@ def login_user(email: str, password: str) -> dict:
     user = result.data[0]
     if not verify_password(password, user["password_hash"]):
         raise ValueError("Invalid credentials")
+
+    if not user.get("email_verified", False):
+        raise PermissionError("Please verify your email before logging in. Check your inbox.")
 
     token = create_access_token({"sub": user["id"], "email": email})
     return {

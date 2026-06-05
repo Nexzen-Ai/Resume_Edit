@@ -16,9 +16,23 @@ class Settings(BaseSettings):
     # Comma-separated allowed CORS origins (frontend URLs).
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
+    # Email verification. If SMTP isn't configured, the verification link is
+    # logged server-side instead of emailed (dev mode).
+    backend_url: str = "http://localhost:8000"
+    frontend_url: str = "http://localhost:3000"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_user and self.smtp_password)
 
     class Config:
         env_file = ".env"

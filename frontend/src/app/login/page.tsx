@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
@@ -9,7 +9,14 @@ export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("verified");
+    if (v === "1") setNotice("Email verified. You can sign in now.");
+    else if (v === "0") setNotice("Verification link is invalid or already used.");
+  }, []);
 
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -75,6 +82,16 @@ export default function LoginPage() {
         }}>
           <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--foreground)" }}>Welcome back</h1>
           <p className="text-sm mb-7" style={{ color: "var(--muted-light)" }}>Sign in to continue</p>
+
+          {notice && (
+            <div className="mb-5 p-3 rounded-xl text-sm border" style={{
+              background: "rgba(0,229,160,0.08)",
+              borderColor: "rgba(0,229,160,0.25)",
+              color: "var(--success)",
+            }}>
+              {notice}
+            </div>
+          )}
 
           {error && (
             <div className="mb-5 p-3 rounded-xl text-sm border" style={{

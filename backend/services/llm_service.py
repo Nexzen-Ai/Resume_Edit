@@ -220,7 +220,7 @@ _ANALYZE_PROMPT = """You extract resume-tailoring terms from a JOB DESCRIPTION.
 CRITICAL: the only SOURCE of terms is the JOB DESCRIPTION text. The RESUME is provided ONLY so you can skip skills the candidate already lists. NEVER take any term from the resume — not its skills, not its job titles, not its past roles or domains. If a term is not written in the job description, do not output it.
 Return TWO lists as JSON, nothing else:
 1. "will_add_skills": concrete skills/tools/technologies/methodologies that ACTUALLY APPEAR in the JOB DESCRIPTION text (tools, languages, frameworks, platforms, and technical practices like "Infrastructure as Code", "Configuration Management", "CI/CD", "Containerization", "Orchestration", "Monitoring", "Troubleshooting"). Aim for up to 20, but only terms truly present in the JD. Skip EXACT duplicates already in the resume. Never invent tools and never borrow from the resume's other domains.
-2. "optional_terms": role titles, disciplines, methodologies, and ATS phrases that appear in the JOB DESCRIPTION (at least 15 if present). Must come from the JD wording — never from the resume's job titles or skills.
+2. "optional_terms": role titles, disciplines, methodologies, responsibilities, and ATS phrases that appear in the JOB DESCRIPTION (aim for AT LEAST 35 distinct phrases if the JD supports it). Must come from the JD wording — never from the resume's job titles or skills.
 Return ONLY: {"will_add_skills": [...], "optional_terms": [...]}"""
 
 
