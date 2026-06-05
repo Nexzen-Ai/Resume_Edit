@@ -36,6 +36,8 @@ class TokenResponse(BaseModel):
     user_id: str
     email: str
     full_name: str
+    role: str = "user"
+    is_admin: bool = False
 
 
 class RegisterResponse(BaseModel):
@@ -123,3 +125,15 @@ class JobStatus(BaseModel):
     status: str
     download_url: Optional[str] = None
     error: Optional[str] = None
+
+
+class GrantRequest(BaseModel):
+    # Days of access from now. None/0 = unlimited (no expiry).
+    days: Optional[int] = None
+
+
+class UserUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+    access_expires_at: Optional[str] = None
+    email_verified: Optional[bool] = None

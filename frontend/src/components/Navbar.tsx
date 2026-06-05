@@ -6,7 +6,7 @@ import { clearAuth, getUser } from "@/lib/auth";
 
 export default function Navbar() {
   const router = useRouter();
-  const [user, setUser] = useState<{ full_name?: string } | null>(null);
+  const [user, setUser] = useState<{ full_name?: string; is_admin?: boolean } | null>(null);
 
   useEffect(() => {
     setUser(getUser());
@@ -40,6 +40,12 @@ export default function Navbar() {
       </Link>
 
       <div className="flex items-center gap-5">
+        {user?.is_admin && (
+          <Link href="/admin" className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
+            style={{ background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(0,200,255,0.25)" }}>
+            Admin
+          </Link>
+        )}
         {user && (
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{

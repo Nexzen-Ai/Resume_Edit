@@ -28,8 +28,10 @@ export default function LoginPage() {
         user_id: res.data.user_id,
         email: res.data.email,
         full_name: res.data.full_name,
+        is_admin: res.data.is_admin,
+        role: res.data.role,
       });
-      router.replace("/dashboard");
+      router.replace(res.data.is_admin ? "/admin" : "/dashboard");
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       if (Array.isArray(detail)) {

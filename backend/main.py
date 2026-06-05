@@ -5,7 +5,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from config import settings
 from ratelimit import limiter
-from routers import auth, resume, edit
+from routers import auth, resume, edit, admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(resume.router)
 app.include_router(edit.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

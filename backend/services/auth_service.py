@@ -1,11 +1,39 @@
 import hashlib
 import uuid
 import bcrypt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from database import supabase
 from config import settings
+
+
+def is_admin(user: dict) -> bool:
+    return user.get("role") == "admin" or (user.get("email", "").lower() in settings.admin_email_set)
+
+
+def _enforce_access(user: dict) -> None:
+    """Raise PermissionError if the account is disabled or its term expired."""
+    if not user.get("is_active", True):
+        raise PermissionError("Your access has been revoked. Contact the administrator.")
+    expires = user.get("access_expires_at")
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if exp_dt < datetime.now(timezone.utc):
+                raise PermissionError("Your access term has expired. Contact the administrator.")
+        except ValueError:
+            pass  # unparseable expiry — don't lock the user out
+
+
+def _maybe_seed_admin(user: dict) -> dict:
+    """Promote an account to admin if its email is in ADMIN_EMAILS."""
+    if user.get("email", "").lower() in settings.admin_email_set and user.get("role") != "admin":
+        supabase.table("users").update({"role": "admin"}).eq("id", user["id"]).execute()
+        user["role"] = "admin"
+    return user
 
 
 def _pre_hash(password: str) -> bytes:
@@ -80,12 +108,17 @@ def login_user(email: str, password: str) -> dict:
     if not user.get("email_verified", False):
         raise PermissionError("Please verify your email before logging in. Check your inbox.")
 
+    _maybe_seed_admin(user)
+    _enforce_access(user)
+
     token = create_access_token({"sub": user["id"], "email": email})
     return {
         "access_token": token,
         "user_id": user["id"],
         "email": email,
         "full_name": user["full_name"],
+        "role": user.get("role", "user"),
+        "is_admin": is_admin(user),
     }
 
 
@@ -94,8 +127,14 @@ def get_current_user(token: str) -> dict:
     if not payload:
         raise ValueError("Invalid token")
 
-    result = supabase.table("users").select("id, email, full_name").eq("id", payload["sub"]).execute()
+    result = supabase.table("users") \
+        .select("id, email, full_name, role, is_active, access_expires_at") \
+        .eq("id", payload["sub"]).execute()
     if not result.data:
         raise ValueError("User not found")
 
-    return result.data[0]
+    user = _maybe_seed_admin(result.data[0])
+    # Revoking access or expiry kills live sessions, not just new logins.
+    _enforce_access(user)
+    user["is_admin"] = is_admin(user)
+    return user

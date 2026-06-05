@@ -6,6 +6,9 @@ create table if not exists users (
   full_name text not null,
   email_verified boolean not null default false,
   verification_token text,
+  role text not null default 'user',
+  is_active boolean not null default true,
+  access_expires_at timestamptz,
   created_at timestamptz default now()
 );
 

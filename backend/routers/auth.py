@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
     try:
         return get_current_user(credentials.credentials)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 

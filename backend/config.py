@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     daily_edit_limit: int = 5
     # Comma-separated allowed CORS origins (frontend URLs).
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
+    # Comma-separated emails that are auto-granted the admin role on login.
+    admin_emails: str = ""
 
     # Email verification. If SMTP isn't configured, the verification link is
     # logged server-side instead of emailed (dev mode).
@@ -29,6 +31,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def admin_email_set(self) -> set:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
     @property
     def smtp_configured(self) -> bool:

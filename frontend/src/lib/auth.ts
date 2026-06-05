@@ -1,4 +1,7 @@
-export function saveAuth(token: string, user: { user_id: string; email: string; full_name: string }) {
+export function saveAuth(
+  token: string,
+  user: { user_id: string; email: string; full_name: string; is_admin?: boolean; role?: string },
+) {
   localStorage.setItem("token", token);
   localStorage.setItem("user", JSON.stringify(user));
 }
