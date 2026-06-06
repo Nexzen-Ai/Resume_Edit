@@ -25,6 +25,10 @@ export default function Dashboard() {
   const [fileName, setFileName] = useState("tailored_resume");
   const [extracting, setExtracting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeMsg, setUpgradeMsg] = useState("");
+  const [upgradeSending, setUpgradeSending] = useState(false);
+  const [upgradeSent, setUpgradeSent] = useState(false);
   const shotRef = useRef<HTMLInputElement>(null);
   // Block A: concrete skills that will be added (deselectable, default all on)
   const [willSkills, setWillSkills] = useState<string[]>([]);
@@ -63,17 +67,23 @@ export default function Dashboard() {
       setSuccess("Resume uploaded"); setTimeout(() => setSuccess(""), 3000);
       fetchResumes();
     } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
       const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setError(Array.isArray(d) ? d.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") : (d as string) || "Upload failed");
+      if (status === 403) { setUpgradeSent(false); setShowUpgrade(true); }  // limit reached
+      else setError(Array.isArray(d) ? d.map((e: { msg?: string }) => e.msg).filter(Boolean).join(", ") : (d as string) || "Upload failed");
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
-  async function handleDelete(id: string) {
+  async function submitUpgrade() {
+    setUpgradeSending(true);
     try {
-      await api.delete(`/resume/${id}`);
-      setResumes(prev => prev.filter(r => r.resume_id !== id));
-      if (selectedResume === id) setSelectedResume(resumes.find(r => r.resume_id !== id)?.resume_id || "");
-    } catch {}
+      await api.post("/resume/upgrade-request", { message: upgradeMsg });
+      setUpgradeSent(true);
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(d || "Could not send request");
+      setShowUpgrade(false);
+    } finally { setUpgradeSending(false); }
   }
 
   function fileToDataUrl(file: File): Promise<string> {
@@ -202,6 +212,47 @@ export default function Dashboard() {
 
       <Navbar />
 
+      {/* Upgrade modal — resume is locked; request more via admin */}
+      {showUpgrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+          <div className="w-full max-w-md rounded-2xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+            {upgradeSent ? (
+              <>
+                <h3 className="text-lg font-bold" style={{ color: "var(--success)" }}>Request sent ✓</h3>
+                <p className="text-sm mt-2" style={{ color: "var(--muted-light)" }}>
+                  The admin will review your request and contact you. After upgrade you can add more resumes.
+                </p>
+                <button onClick={() => setShowUpgrade(false)} className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold"
+                  style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)", color: "#fff" }}>Close</button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold" style={{ color: "var(--foreground)" }}>Upgrade account</h3>
+                <p className="text-sm mt-2" style={{ color: "var(--muted-light)" }}>
+                  Your plan allows one resume (use it with unlimited job descriptions). To add more resumes,
+                  send an upgrade request — the admin will contact you.
+                </p>
+                <textarea
+                  value={upgradeMsg}
+                  onChange={(e) => setUpgradeMsg(e.target.value)}
+                  placeholder="Optional: your phone/contact and how many resumes you need..."
+                  className="mt-4 w-full rounded-xl p-3 text-sm resize-none outline-none min-h-[90px]"
+                  style={{ background: "#080f22", border: "1px solid var(--border)", color: "var(--foreground)" }}
+                />
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setShowUpgrade(false)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                    style={{ border: "1px solid var(--border)", color: "var(--muted-light)" }}>Cancel</button>
+                  <button onClick={submitUpgrade} disabled={upgradeSending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)", color: "#fff" }}>
+                    {upgradeSending ? "Sending..." : "Send request"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <main className="relative max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -295,7 +346,8 @@ export default function Dashboard() {
                       </div>
                       {selected && <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />}
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(r.resume_id); }}
+                        onClick={(e) => { e.stopPropagation(); setUpgradeSent(false); setShowUpgrade(true); }}
+                        title="Resume is locked — upgrade to add more"
                         className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all"
                         style={{ color: "var(--muted)" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "#ff4d6d")}

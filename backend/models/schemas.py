@@ -127,6 +127,20 @@ class JobStatus(BaseModel):
     error: Optional[str] = None
 
 
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+
+class UpgradeRequestBody(BaseModel):
+    message: Optional[str] = None
+
+
+class SetResumeLimit(BaseModel):
+    limit: int
+
+
 class GrantRequest(BaseModel):
     # Days of access from now. None/0 = unlimited (no expiry).
     days: Optional[int] = None

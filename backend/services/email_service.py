@@ -29,10 +29,12 @@ def send_verification_email(to_email: str, full_name: str, token: str) -> None:
     )
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg)
     except Exception:
+        # Don't block signup on an email hiccup — log the link so it can still
+        # be used (dev/fallback), and let registration succeed.
         logger.exception("Failed to send verification email to %s", to_email)
-        raise
+        logger.warning("Verification link for %s (email send failed): %s", to_email, link)

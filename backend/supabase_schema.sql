@@ -9,6 +9,18 @@ create table if not exists users (
   role text not null default 'user',
   is_active boolean not null default true,
   access_expires_at timestamptz,
+  resume_limit integer not null default 1,
+  created_at timestamptz default now()
+);
+
+-- Upgrade requests: users ask admin to raise their resume limit (paid offline).
+create table if not exists upgrade_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  email text not null,
+  full_name text not null,
+  message text,
+  status text not null default 'pending',
   created_at timestamptz default now()
 );
 
@@ -41,6 +53,7 @@ create table if not exists edit_jobs (
 alter table users enable row level security;
 alter table resumes enable row level security;
 alter table edit_jobs enable row level security;
+alter table upgrade_requests enable row level security;
 -- (intentionally no CREATE POLICY statements: anon = fully denied, service key = full access)
 
 -- Storage buckets (run in Supabase dashboard > Storage > New bucket)

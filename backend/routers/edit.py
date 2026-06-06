@@ -82,16 +82,18 @@ def _process_edit(job_id: str, user_id: str, storage_path: str, resume_text: str
 
 @router.post("/", response_model=EditResponse)
 def start_edit(body: EditRequest, background_tasks: BackgroundTasks, user: dict = Depends(current_user)):
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    # Count only non-failed jobs so a failed attempt doesn't burn the daily quota.
-    count_result = supabase.table("edit_jobs") \
-        .select("id", count="exact") \
-        .eq("user_id", user["id"]) \
-        .neq("status", "failed") \
-        .gte("created_at", today_start) \
-        .execute()
-    if (count_result.count or 0) >= settings.daily_edit_limit:
-        raise HTTPException(status_code=429, detail=f"Daily limit of {settings.daily_edit_limit} edits reached. Try again tomorrow.")
+    # Admins have unlimited edits — skip the daily quota for them.
+    if not user.get("is_admin"):
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        # Count only non-failed jobs so a failed attempt doesn't burn the daily quota.
+        count_result = supabase.table("edit_jobs") \
+            .select("id", count="exact") \
+            .eq("user_id", user["id"]) \
+            .neq("status", "failed") \
+            .gte("created_at", today_start) \
+            .execute()
+        if (count_result.count or 0) >= settings.daily_edit_limit:
+            raise HTTPException(status_code=429, detail=f"Daily limit of {settings.daily_edit_limit} edits reached. Try again tomorrow.")
 
     result = supabase.table("resumes") \
         .select("resume_text, filename, storage_path") \

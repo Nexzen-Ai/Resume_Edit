@@ -3,7 +3,7 @@ import re
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from models.schemas import ResumeUploadResponse, ResumeInfo
+from models.schemas import ResumeUploadResponse, ResumeInfo, UpgradeRequestBody
 from routers.auth import current_user
 from services.resume_parser import extract_resume_text, strip_resume
 from database import supabase
@@ -27,10 +27,11 @@ async def upload_resume(
     user: dict = Depends(current_user),
 ):
     existing = supabase.table("resumes").select("id").eq("user_id", user["id"]).execute()
-    if existing.data:
+    limit = user.get("resume_limit", 1)
+    if not user.get("is_admin") and len(existing.data) >= limit:
         raise HTTPException(
-            status_code=400,
-            detail="You already have a resume uploaded. Delete it first before uploading a new one.",
+            status_code=403,
+            detail=f"You've reached your resume limit ({limit}). Upgrade your account to add more.",
         )
 
     if file.content_type not in ALLOWED_TYPES:
@@ -79,9 +80,31 @@ def list_resumes(user: dict = Depends(current_user)):
     return [ResumeInfo(resume_id=r["id"], filename=r["filename"], uploaded_at=r["uploaded_at"]) for r in result.data]
 
 
+@router.post("/upgrade-request")
+def request_upgrade(body: UpgradeRequestBody, user: dict = Depends(current_user)):
+    """User enquiry to raise their resume limit. Admin reviews it in the admin panel."""
+    supabase.table("upgrade_requests").insert({
+        "user_id": user["id"],
+        "email": user["email"],
+        "full_name": user["full_name"],
+        "message": (body.message or "").strip()[:1000],
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat(),
+    }).execute()
+    return {"message": "Request sent. The admin will review it and contact you."}
+
+
 @router.delete("/{resume_id}")
 def delete_resume(resume_id: str, user: dict = Depends(current_user)):
-    result = supabase.table("resumes").select("*").eq("id", resume_id).eq("user_id", user["id"]).execute()
+    # A resume is permanent for normal users (one upload, many JDs). Only an
+    # admin can delete it. Users wanting another resume must upgrade.
+    if not user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Your resume can't be deleted. To add more resumes, upgrade your account.",
+        )
+
+    result = supabase.table("resumes").select("*").eq("id", resume_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Resume not found")
 

@@ -2,8 +2,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from models.schemas import UserRegister, UserLogin, TokenResponse, RegisterResponse
-from services.auth_service import register_user, login_user, get_current_user, verify_email_token
+from models.schemas import UserRegister, UserLogin, TokenResponse, RegisterResponse, ProfileUpdate
+from services.auth_service import register_user, login_user, get_current_user, verify_email_token, update_profile
 from services.email_service import send_verification_email
 from ratelimit import limiter
 from config import settings
@@ -30,12 +30,8 @@ def register(request: Request, body: UserRegister):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    try:
-        send_verification_email(result["email"], result["full_name"], result["verification_token"])
-    except Exception:
-        logger.exception("Verification email failed for %s", result["email"])
-        # Account exists but email failed — surface a clear, retryable message.
-        raise HTTPException(status_code=502, detail="Could not send verification email. Please try again.")
+    # Never blocks on email problems — failures are logged with the link inside.
+    send_verification_email(result["email"], result["full_name"], result["verification_token"])
 
     return RegisterResponse(
         message="Account created. Check your email and verify it before logging in.",
@@ -65,3 +61,12 @@ def login(request: Request, body: UserLogin):
 @router.get("/me")
 def me(user: dict = Depends(current_user)):
     return user
+
+
+@router.patch("/me")
+def update_me(body: ProfileUpdate, user: dict = Depends(current_user)):
+    try:
+        name = update_profile(user["id"], body.full_name, body.current_password, body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Profile updated", "full_name": name, "email": user["email"]}

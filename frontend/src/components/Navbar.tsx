@@ -47,7 +47,7 @@ export default function Navbar() {
           </Link>
         )}
         {user && (
-          <div className="flex items-center gap-2.5">
+          <Link href="/profile" className="flex items-center gap-2.5 group" title="Edit profile">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{
               background: "linear-gradient(135deg, #00c8ff22, #0066ff22)",
               border: "1px solid var(--border-bright)",
@@ -55,8 +55,8 @@ export default function Navbar() {
             }}>
               {user.full_name?.[0]?.toUpperCase()}
             </div>
-            <span className="text-sm hidden sm:block" style={{ color: "var(--muted-light)" }}>{user.full_name}</span>
-          </div>
+            <span className="text-sm hidden sm:block group-hover:text-white transition-colors" style={{ color: "var(--muted-light)" }}>{user.full_name}</span>
+          </Link>
         )}
         <button
           onClick={logout}

@@ -1,15 +1,16 @@
 import logging
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from routers.auth import current_user
 from services.auth_service import is_admin
-from models.schemas import GrantRequest, UserUpdate
+from models.schemas import GrantRequest, UserUpdate, SetResumeLimit
 from database import supabase
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
 
-_USER_FIELDS = "id, email, full_name, role, is_active, email_verified, access_expires_at, created_at"
+_USER_FIELDS = "id, email, full_name, role, is_active, email_verified, access_expires_at, resume_limit, created_at"
 
 
 def admin_required(user: dict = Depends(current_user)) -> dict:
@@ -28,12 +29,65 @@ def stats(admin: dict = Depends(admin_required)):
     return {"total_users": total, "active_users": active, "edits_today": edits.count or 0}
 
 
+@router.get("/usage")
+def usage_range(admin: dict = Depends(admin_required), start: str = "", end: str = ""):
+    """Per-user edits (credits used) over a date range [start, end] (YYYY-MM-DD).
+    Defaults to the last 30 days. Single day = start == end."""
+    today = datetime.utcnow().date()
+    end = end.strip() or today.isoformat()
+    start = start.strip() or (today - timedelta(days=29)).isoformat()
+    s, e = f"{start}T00:00:00", f"{end}T23:59:59.999999"
+    rows = supabase.table("edit_jobs").select("user_id, status, created_at") \
+        .gte("created_at", s).lte("created_at", e).execute().data
+
+    total = Counter(r["user_id"] for r in rows)
+    done = Counter(r["user_id"] for r in rows if r.get("status") == "done")
+    users = supabase.table("users").select("id, email, full_name").execute().data
+    umap = {u["id"]: u for u in users}
+    per_user = [
+        {
+            "user_id": uid,
+            "email": umap.get(uid, {}).get("email", "?"),
+            "full_name": umap.get(uid, {}).get("full_name", "?"),
+            "edits": cnt,
+            "edits_done": done.get(uid, 0),
+        }
+        for uid, cnt in total.items()
+    ]
+    per_user.sort(key=lambda x: -x["edits"])
+    return {"start": start, "end": end, "total_edits": len(rows), "users": per_user}
+
+
+@router.get("/usage/daily")
+def usage_daily(admin: dict = Depends(admin_required), days: int = 14):
+    """Total edits per day for the last N days (most recent first)."""
+    days = max(1, min(days, 90))
+    since = (datetime.utcnow().date() - timedelta(days=days - 1)).isoformat()
+    rows = supabase.table("edit_jobs").select("created_at") \
+        .gte("created_at", f"{since}T00:00:00").execute().data
+    by_day = Counter((r["created_at"] or "")[:10] for r in rows if r.get("created_at"))
+    return [{"date": d, "edits": by_day.get(d, 0)}
+            for d in sorted(by_day) ][::-1] or [{"date": since, "edits": 0}]
+
+
 @router.get("/users")
 def list_users(admin: dict = Depends(admin_required), search: str = ""):
     q = supabase.table("users").select(_USER_FIELDS).order("created_at", desc=True)
     if search.strip():
         q = q.ilike("email", f"%{search.strip()}%")
-    return q.limit(500).execute().data
+    users = q.limit(500).execute().data
+
+    # Per-user activity counts (resumes uploaded, edits done/total).
+    resumes = supabase.table("resumes").select("user_id").execute().data
+    edits = supabase.table("edit_jobs").select("user_id, status").execute().data
+    rc = Counter(r["user_id"] for r in resumes)
+    et = Counter(e["user_id"] for e in edits)
+    ed = Counter(e["user_id"] for e in edits if e.get("status") == "done")
+    for u in users:
+        u["resume_count"] = rc.get(u["id"], 0)
+        u["edits_total"] = et.get(u["id"], 0)
+        u["edits_done"] = ed.get(u["id"], 0)
+    return users
 
 
 @router.post("/users/{user_id}/grant")
@@ -62,6 +116,27 @@ def update_user(user_id: str, body: UserUpdate, admin: dict = Depends(admin_requ
     if patch:
         supabase.table("users").update(patch).eq("id", user_id).execute()
     return {"message": "Updated"}
+
+
+@router.post("/users/{user_id}/resume-limit")
+def set_resume_limit(user_id: str, body: SetResumeLimit, admin: dict = Depends(admin_required)):
+    limit = max(0, body.limit)
+    supabase.table("users").update({"resume_limit": limit}).eq("id", user_id).execute()
+    return {"message": f"Resume limit set to {limit}"}
+
+
+@router.get("/upgrade-requests")
+def upgrade_requests(admin: dict = Depends(admin_required), status: str = "pending"):
+    q = supabase.table("upgrade_requests").select("*").order("created_at", desc=True)
+    if status:
+        q = q.eq("status", status)
+    return q.limit(200).execute().data
+
+
+@router.post("/upgrade-requests/{req_id}/handle")
+def handle_request(req_id: str, admin: dict = Depends(admin_required)):
+    supabase.table("upgrade_requests").update({"status": "handled"}).eq("id", req_id).execute()
+    return {"message": "Marked handled"}
 
 
 @router.delete("/users/{user_id}")

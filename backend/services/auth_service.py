@@ -29,10 +29,22 @@ def _enforce_access(user: dict) -> None:
 
 
 def _maybe_seed_admin(user: dict) -> dict:
-    """Promote an account to admin if its email is in ADMIN_EMAILS."""
-    if user.get("email", "").lower() in settings.admin_email_set and user.get("role") != "admin":
-        supabase.table("users").update({"role": "admin"}).eq("id", user["id"]).execute()
+    """Promote an account to admin if its email is in ADMIN_EMAILS, and keep
+    admins unlimited: no expiry, always active."""
+    if user.get("email", "").lower() not in settings.admin_email_set:
+        return user
+    needs_update = (
+        user.get("role") != "admin"
+        or user.get("access_expires_at") is not None
+        or not user.get("is_active", True)
+    )
+    if needs_update:
+        supabase.table("users").update({
+            "role": "admin", "access_expires_at": None, "is_active": True,
+        }).eq("id", user["id"]).execute()
         user["role"] = "admin"
+        user["access_expires_at"] = None
+        user["is_active"] = True
     return user
 
 
@@ -82,6 +94,32 @@ def register_user(email: str, password: str, full_name: str) -> dict:
     return {"email": email, "full_name": full_name, "verification_token": token}
 
 
+def update_profile(user_id: str, full_name: str = None,
+                   current_password: str = None, new_password: str = None) -> str:
+    """Update name and/or password. Email is never changeable. Returns the name."""
+    res = supabase.table("users").select("password_hash, full_name").eq("id", user_id).execute()
+    if not res.data:
+        raise ValueError("User not found")
+    current = res.data[0]
+
+    patch = {}
+    if full_name is not None:
+        name = full_name.strip()
+        if not name:
+            raise ValueError("Name cannot be empty.")
+        patch["full_name"] = name
+    if new_password:
+        if not current_password or not verify_password(current_password, current["password_hash"]):
+            raise ValueError("Current password is incorrect.")
+        if len(new_password) < 8:
+            raise ValueError("New password must be at least 8 characters.")
+        patch["password_hash"] = hash_password(new_password)
+
+    if patch:
+        supabase.table("users").update(patch).eq("id", user_id).execute()
+    return patch.get("full_name", current["full_name"])
+
+
 def verify_email_token(token: str) -> bool:
     """Mark the matching account verified. Returns True if a token matched."""
     if not token:
@@ -109,7 +147,8 @@ def login_user(email: str, password: str) -> dict:
         raise PermissionError("Please verify your email before logging in. Check your inbox.")
 
     _maybe_seed_admin(user)
-    _enforce_access(user)
+    if not is_admin(user):
+        _enforce_access(user)  # admins are never expired/revoked
 
     token = create_access_token({"sub": user["id"], "email": email})
     return {
@@ -128,13 +167,14 @@ def get_current_user(token: str) -> dict:
         raise ValueError("Invalid token")
 
     result = supabase.table("users") \
-        .select("id, email, full_name, role, is_active, access_expires_at") \
+        .select("id, email, full_name, role, is_active, access_expires_at, resume_limit") \
         .eq("id", payload["sub"]).execute()
     if not result.data:
         raise ValueError("User not found")
 
     user = _maybe_seed_admin(result.data[0])
-    # Revoking access or expiry kills live sessions, not just new logins.
-    _enforce_access(user)
     user["is_admin"] = is_admin(user)
+    # Revoking access or expiry kills live sessions — but admins are exempt.
+    if not user["is_admin"]:
+        _enforce_access(user)
     return user

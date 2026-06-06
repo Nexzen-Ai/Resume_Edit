@@ -12,6 +12,12 @@ export function getUser() {
   return u ? JSON.parse(u) : null;
 }
 
+export function updateUser(partial: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  const u = getUser() || {};
+  localStorage.setItem("user", JSON.stringify({ ...u, ...partial }));
+}
+
 export function getToken() {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
