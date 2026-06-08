@@ -20,10 +20,15 @@ export default function Brand({
     <span className="flex items-center gap-2.5">
       <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
         <span
-          className="absolute inset-0 rounded-[26%] blur-md opacity-40"
+          className="absolute inset-0 rounded-[26%] blur-md opacity-45"
           style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)" }}
         />
-        <Image src="/logo.svg" alt="NexCV" width={size} height={size} className="relative rounded-[26%]" priority />
+        <span
+          className="relative rounded-[26%] overflow-hidden bg-white"
+          style={{ width: size, height: size }}
+        >
+          <Image src="/logo.png" alt="NexCV" fill sizes="48px" className="object-contain p-[12%]" priority />
+        </span>
       </span>
       {wordmark && (
         <span className={`font-bold tracking-tight ${wordmarkClass}`} style={{ color: "var(--foreground)" }}>

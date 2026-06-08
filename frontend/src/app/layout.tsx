@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "NexCV — AI-Powered Resume Editor",
   description: "Tailor your resume to any job description and beat the ATS with NexCV.",
-  icons: { icon: "/logo.svg", shortcut: "/logo.svg", apple: "/logo.svg" },
+  icons: { icon: "/logo.png", shortcut: "/logo.png", apple: "/logo.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
