@@ -5,8 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Resume Tailor — AI-Powered Resume Editor",
-  description: "Tailor your resume to any job description using AI",
+  title: "NexCV — AI-Powered Resume Editor",
+  description: "Tailor your resume to any job description and beat the ATS with NexCV.",
+  icons: { icon: "/logo.svg", shortcut: "/logo.svg", apple: "/logo.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

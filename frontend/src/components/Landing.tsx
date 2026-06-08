@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Brand from "@/components/Brand";
 import { useEffect, useState } from "react";
 import {
   motion,
@@ -159,22 +160,7 @@ export default function Landing() {
 
       {/* Nav */}
       <nav className="relative z-10 flex items-center justify-between px-6 md:px-12 py-5 max-w-7xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-            </div>
-            <div className="absolute inset-0 rounded-xl blur-md opacity-40" style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)" }} />
-          </div>
-          <span className="text-lg font-bold tracking-tight">
-            Resume<span style={{ color: "var(--accent)" }}>Tailor</span>
-          </span>
-        </div>
+        <Brand href="/" size={36} wordmarkClass="text-lg" />
         <div className="flex items-center gap-2">
           <Link href="/login" className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors hover:bg-white/5" style={{ color: "var(--muted-light)" }}>
             Sign in
