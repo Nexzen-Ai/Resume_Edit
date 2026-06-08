@@ -1,18 +1,17 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isLoggedIn } from "@/lib/auth";
+import Landing from "@/components/Landing";
 
 export default function Home() {
   const router = useRouter();
+  const [loggedIn] = useState(() => isLoggedIn());
 
   useEffect(() => {
-    if (isLoggedIn()) {
-      router.replace("/dashboard");
-    } else {
-      router.replace("/login");
-    }
-  }, [router]);
+    if (loggedIn) router.replace("/dashboard");
+  }, [loggedIn, router]);
 
-  return null;
+  if (loggedIn) return null;
+  return <Landing />;
 }
