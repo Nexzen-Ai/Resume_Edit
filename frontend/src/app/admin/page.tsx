@@ -85,6 +85,7 @@ export default function AdminPage() {
     const days = v.trim() === "" ? null : parseInt(v, 10);
     act(id, () => api.post(`/admin/users/${id}/grant`, { days }));
   };
+  const verifyEmail = (id: string) => act(id, () => api.post(`/admin/users/${id}/verify-email`));
   const revoke = (id: string) => act(id, () => api.post(`/admin/users/${id}/revoke`));
   const remove = (id: string) => {
     if (!confirm("Delete this user and all their data?")) return;
@@ -148,8 +149,8 @@ export default function AdminPage() {
                 className="px-2 py-1 rounded-lg text-xs outline-none" style={{ background: "#080f22", border: "1px solid var(--border)", color: "var(--foreground)" }} />
             </div>
           </div>
-          {usage && usage.users.length > 0 ? (
-            <div className="space-y-1.5">
+          {usage?.users.length ? (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {usage.users.map((u) => (
                 <div key={u.user_id} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.02)" }}>
                   <span style={{ color: "var(--muted-light)" }}>{u.full_name} <span style={{ color: "var(--muted)" }}>· {u.email}</span></span>
@@ -213,7 +214,22 @@ export default function AdminPage() {
                     <div className="text-xs" style={{ color: "var(--muted)" }}>{u.email}</div>
                   </td>
                   <td className="p-3" style={{ color: u.role === "admin" ? "var(--accent)" : "var(--muted-light)" }}>{u.role}</td>
-                  <td className="p-3">{u.email_verified ? "✓" : "✗"}</td>
+                  <td className="p-3">
+                    {u.email_verified ? (
+                      <span className="text-xs px-2 py-0.5 rounded font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                        ✓ Verified
+                      </span>
+                    ) : (
+                      <button
+                        disabled={busy === u.id}
+                        onClick={() => verifyEmail(u.id)}
+                        className="text-[11px] px-2 py-1 rounded-lg font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/40 hover:bg-amber-900/60 cursor-pointer"
+                        title="Click to manually verify user email without SMTP"
+                      >
+                        ⚡ Verify Email
+                      </button>
+                    )}
+                  </td>
                   <td className="p-3" style={{ color: "var(--muted-light)" }}>{u.resume_count}</td>
                   <td className="p-3" style={{ color: "var(--muted-light)" }}>{u.edits_done}<span style={{ color: "var(--muted)" }}>/{u.edits_total}</span></td>
                   <td className="p-3">
@@ -229,6 +245,9 @@ export default function AdminPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex gap-1.5 justify-end">
+                      {!u.email_verified && (
+                        <button disabled={busy === u.id} onClick={() => verifyEmail(u.id)} className="text-xs px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30">Verify</button>
+                      )}
                       <button disabled={busy === u.id} onClick={() => grant(u.id)} className="text-xs px-2.5 py-1 rounded-lg" style={{ background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(0,200,255,0.25)" }}>Grant</button>
                       <button disabled={busy === u.id} onClick={() => revoke(u.id)} className="text-xs px-2.5 py-1 rounded-lg" style={{ background: "rgba(255,77,109,0.08)", color: "#ff4d6d", border: "1px solid rgba(255,77,109,0.25)" }}>Revoke</button>
                       <button disabled={busy === u.id} onClick={() => remove(u.id)} className="text-xs px-2.5 py-1 rounded-lg" style={{ background: "transparent", color: "var(--muted)", border: "1px solid var(--border)" }}>Delete</button>

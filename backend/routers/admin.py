@@ -10,7 +10,7 @@ from database import supabase
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
 
-_USER_FIELDS = "id, email, full_name, role, is_active, email_verified, access_expires_at, resume_limit, created_at"
+_USER_FIELDS = "id, email, full_name, role, is_active, email_verified, verification_token, access_expires_at, resume_limit, created_at"
 
 
 def admin_required(user: dict = Depends(current_user)) -> dict:
@@ -106,6 +106,13 @@ def revoke_access(user_id: str, admin: dict = Depends(admin_required)):
         raise HTTPException(status_code=400, detail="You cannot revoke your own access.")
     supabase.table("users").update({"is_active": False}).eq("id", user_id).execute()
     return {"message": "Access revoked"}
+
+
+@router.post("/users/{user_id}/verify-email")
+def admin_verify_email(user_id: str, admin: dict = Depends(admin_required)):
+    """Manually mark a user's email as verified (bypassing SMTP email requirement)."""
+    supabase.table("users").update({"email_verified": True, "verification_token": None}).eq("id", user_id).execute()
+    return {"message": "User email verified by admin"}
 
 
 @router.patch("/users/{user_id}")
