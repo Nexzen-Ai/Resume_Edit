@@ -99,6 +99,8 @@ export default function AdminPage() {
     act(id, () => api.post(`/admin/users/${id}/resume-limit`, { limit }));
   };
   const handleReq = (id: string) => act(id, () => api.post(`/admin/upgrade-requests/${id}/handle`));
+  const approveLimit = (id: string) => act(id, () => api.post(`/admin/upgrade-requests/${id}/approve-limit`));
+  const approveClearResume = (id: string) => act(id, () => api.post(`/admin/upgrade-requests/${id}/approve-clear-resume`));
 
   const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
   const expired = (iso: string | null) => !!iso && new Date(iso) < new Date();
@@ -149,6 +151,7 @@ export default function AdminPage() {
                 className="px-2 py-1 rounded-lg text-xs outline-none" style={{ background: "#080f22", border: "1px solid var(--border)", color: "var(--foreground)" }} />
             </div>
           </div>
+
           {usage?.users.length ? (
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {usage.users.map((u) => (
@@ -171,22 +174,47 @@ export default function AdminPage() {
         {requests.length > 0 && (
           <div className="p-5" style={card}>
             <h2 className="font-semibold text-sm mb-3" style={{ color: "var(--accent)" }}>
-              Upgrade Requests · {requests.length}
+              Upgrade & Deletion Requests · {requests.length}
             </h2>
             <div className="space-y-2">
               {requests.map((r) => (
-                <div key={r.id} className="flex items-start justify-between gap-3 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)" }}>
+                <div key={r.id} className="flex items-center justify-between gap-3 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)" }}>
                   <div className="min-w-0">
                     <div className="text-sm" style={{ color: "white" }}>{r.full_name} <span style={{ color: "var(--muted)" }}>· {r.email}</span></div>
-                    {r.message && <div className="text-xs mt-1" style={{ color: "var(--muted-light)" }}>{r.message}</div>}
+                    {r.message && <div className="text-xs mt-1 text-cyan-300 bg-cyan-950/40 px-2 py-1 rounded border border-cyan-500/20">{r.message}</div>}
                     <div className="text-xs mt-1" style={{ color: "var(--muted)" }}>{fmt(r.created_at)}</div>
                   </div>
-                  <button disabled={busy === r.id} onClick={() => handleReq(r.id)} className="shrink-0 text-xs px-2.5 py-1 rounded-lg" style={{ background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(0,200,255,0.25)" }}>Mark handled</button>
+                  <div className="flex flex-wrap gap-1.5 shrink-0 items-center">
+                    <button
+                      disabled={busy === r.id}
+                      onClick={() => approveLimit(r.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg font-medium bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-900/70 cursor-pointer"
+                      title="Increase user resume limit (+1)"
+                    >
+                      +1 Resume Limit
+                    </button>
+                    <button
+                      disabled={busy === r.id}
+                      onClick={() => approveClearResume(r.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg font-medium bg-amber-950/70 text-amber-300 border border-amber-500/40 hover:bg-amber-900/70 cursor-pointer"
+                      title="Clear user's uploaded resume so they can upload a new one"
+                    >
+                      Clear User Resume
+                    </button>
+                    <button
+                      disabled={busy === r.id}
+                      onClick={() => handleReq(r.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg"
+                      style={{ background: "transparent", color: "var(--muted-light)", border: "1px solid var(--border)" }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-        )}
+        )}        )}
 
         <input
           value={search}

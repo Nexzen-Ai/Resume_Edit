@@ -134,6 +134,20 @@ export default function Dashboard() {
     } finally { setAnalyzing(false); }
   }
 
+  async function handleDeleteResume(resume_id: string) {
+    if (!confirm("Are you sure you want to delete this resume? You will be able to upload a new resume immediately.")) return;
+    try {
+      await api.delete(`/resume/${resume_id}`);
+      setSuccess("Resume deleted successfully");
+      setTimeout(() => setSuccess(""), 3000);
+      if (selectedResume === resume_id) setSelectedResume("");
+      fetchResumes();
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(d || "Could not delete resume");
+    }
+  }
+
   function toggleFrom(setFn: React.Dispatch<React.SetStateAction<Set<string>>>, v: string) {
     setFn((prev) => {
       const next = new Set(prev);
@@ -346,14 +360,14 @@ export default function Dashboard() {
                       </div>
                       {selected && <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />}
                       <button
-                        onClick={(e) => { e.stopPropagation(); setUpgradeSent(false); setShowUpgrade(true); }}
-                        title="Resume is locked — upgrade to add more"
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteResume(r.resume_id); }}
+                        title="Delete this resume to upload a new one"
+                        className="opacity-80 group-hover:opacity-100 p-1.5 rounded-lg transition-all hover:bg-rose-950/40 border border-transparent hover:border-rose-500/30"
                         style={{ color: "var(--muted)" }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = "#ff4d6d")}
                         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                       </button>
                     </div>
                   );

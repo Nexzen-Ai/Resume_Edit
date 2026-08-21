@@ -146,6 +146,39 @@ def handle_request(req_id: str, admin: dict = Depends(admin_required)):
     return {"message": "Marked handled"}
 
 
+@router.post("/upgrade-requests/{req_id}/approve-limit")
+def approve_request_limit(req_id: str, admin: dict = Depends(admin_required)):
+    """Approve request: Increase user's resume limit by +1."""
+    req = supabase.table("upgrade_requests").select("*").eq("id", req_id).execute()
+    if not req.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    user_id = req.data[0]["user_id"]
+    u = supabase.table("users").select("resume_limit").eq("id", user_id).execute()
+    curr = u.data[0].get("resume_limit", 1) if u.data else 1
+    new_limit = curr + 1
+    supabase.table("users").update({"resume_limit": new_limit}).eq("id", user_id).execute()
+    supabase.table("upgrade_requests").update({"status": "handled"}).eq("id", req_id).execute()
+    return {"message": f"Approved! Resume limit increased to {new_limit}"}
+
+
+@router.post("/upgrade-requests/{req_id}/approve-clear-resume")
+def approve_request_clear_resume(req_id: str, admin: dict = Depends(admin_required)):
+    """Approve request: Clear user's uploaded resume so they can upload a new one."""
+    req = supabase.table("upgrade_requests").select("*").eq("id", req_id).execute()
+    if not req.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    user_id = req.data[0]["user_id"]
+    resumes = supabase.table("resumes").select("id, storage_path").eq("user_id", user_id).execute()
+    for r in resumes.data:
+        try:
+            supabase.storage.from_("resumes").remove([r["storage_path"]])
+        except Exception:
+            pass
+        supabase.table("resumes").delete().eq("id", r["id"]).execute()
+    supabase.table("upgrade_requests").update({"status": "handled"}).eq("id", req_id).execute()
+    return {"message": "Approved! User resume cleared. User can now upload a new resume."}
+
+
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, admin: dict = Depends(admin_required)):
     if user_id == admin["id"]:

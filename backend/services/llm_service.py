@@ -120,47 +120,62 @@ Return JSON matching this schema exactly:
 {schema}
 company/title must exactly match resume text."""
 
-    for attempt in range(3):
-        try:
-            response = litellm.completion(
-                model=settings.llm_model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=1600,
-                temperature=0.3,
-                api_key=settings.llm_api_key,
-                timeout=60,
-            )
-            raw = response.choices[0].message.content.strip()
-            match = re.search(r"\{[\s\S]*\}", raw)
-            if not match:
-                raise ValueError("LLM returned no JSON block")
-            result = json.loads(match.group())
-            result.setdefault("experience_enhancements", [])
-            # Flatten categorized skills into a flat list for history/storage.
-            skills = result.get("skills_to_add", [])
-            if skills and isinstance(skills[0], dict):
-                result["added_skills"] = [s for g in skills for s in g.get("skills", [])]
-            else:
-                result["added_skills"] = skills
-            # Keywords must differ from skills — drop exact overlaps for history.
-            skills_lower = {s.lower() for s in result["added_skills"]}
-            result["keywords_added"] = [
-                k for k in result.get("keywords_added", []) if k and k.lower() not in skills_lower
-            ]
-            _set_cached(key, result)
-            return result
-        except litellm.Timeout:
-            raise ValueError("AI took too long to respond (>60s). Try again.")
-        except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                wait = 15 * (attempt + 1)
-                print(f"[LLM] Rate limited, retrying in {wait}s...")
-                time.sleep(wait)
-                continue
-            raise
+    models_to_try = [
+        settings.llm_model,
+        "groq/llama-3.1-70b-versatile",
+        "groq/llama3-70b-8192",
+        "groq/llama-3.1-8b-instant",
+    ]
+    seen_m = set()
+    models_to_try = [m for m in models_to_try if not (m in seen_m or seen_m.add(m))]
+
+    last_error = None
+    for model_name in models_to_try:
+        for attempt in range(2):
+            try:
+                response = litellm.completion(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=1600,
+                    temperature=0.3,
+                    api_key=settings.llm_api_key,
+                    timeout=60,
+                )
+                raw = response.choices[0].message.content.strip()
+                match = re.search(r"\{[\s\S]*\}", raw)
+                if not match:
+                    raise ValueError("LLM returned no JSON block")
+                result = json.loads(match.group())
+                result.setdefault("experience_enhancements", [])
+                # Flatten categorized skills into a flat list for history/storage.
+                skills = result.get("skills_to_add", [])
+                if skills and isinstance(skills[0], dict):
+                    result["added_skills"] = [s for g in skills for s in g.get("skills", [])]
+                else:
+                    result["added_skills"] = skills
+                # Keywords must differ from skills — drop exact overlaps for history.
+                skills_lower = {s.lower() for s in result["added_skills"]}
+                result["keywords_added"] = [
+                    k for k in result.get("keywords_added", []) if k and k.lower() not in skills_lower
+                ]
+                _set_cached(key, result)
+                return result
+            except litellm.Timeout:
+                last_error = ValueError("AI took too long to respond (>60s). Try again.")
+                break
+            except Exception as e:
+                last_error = e
+                if "429" in str(e) and attempt < 1:
+                    time.sleep(3)
+                    continue
+                break
+
+    if last_error:
+        raise last_error
+    raise ValueError("AI processing failed. Please try again in a moment.")
 
 
 _VISION_PROMPT = """You are reading screenshots of a job description.
@@ -236,43 +251,62 @@ def analyze_jd_preview(resume_text: str, job_description: str) -> dict:
         "Return the two JSON lists, extracting strictly from the job description."
     )
 
-    for attempt in range(3):
-        try:
-            response = litellm.completion(
-                model=settings.llm_model,
-                messages=[
-                    {"role": "system", "content": _ANALYZE_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=900,
-                temperature=0.2,
-                api_key=settings.llm_api_key,
-                timeout=60,
-            )
-            raw = response.choices[0].message.content.strip()
-            match = re.search(r"\{[\s\S]*\}", raw)
-            if not match:
-                raise ValueError("Analyzer returned no JSON block")
-            data = json.loads(match.group())
+    models_to_try = [
+        settings.llm_model,
+        "groq/llama-3.1-70b-versatile",
+        "groq/llama3-70b-8192",
+        "groq/llama-3.1-8b-instant",
+    ]
+    # Remove duplicates preserving order
+    seen_m = set()
+    models_to_try = [m for m in models_to_try if not (m in seen_m or seen_m.add(m))]
 
-            def _clean(items):
-                seen, out = set(), []
-                for s in items or []:
-                    s = (s or "").strip()
-                    if s and s.lower() not in seen:
-                        seen.add(s.lower())
-                        out.append(s)
-                return out
+    last_error = None
+    for model_name in models_to_try:
+        for attempt in range(2):
+            try:
+                response = litellm.completion(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _ANALYZE_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=900,
+                    temperature=0.2,
+                    api_key=settings.llm_api_key,
+                    timeout=60,
+                )
+                raw = response.choices[0].message.content.strip()
+                match = re.search(r"\{[\s\S]*\}", raw)
+                if not match:
+                    raise ValueError("Analyzer returned no JSON block")
+                data = json.loads(match.group())
 
-            skills = _clean(data.get("will_add_skills"))
-            # Optional terms must not duplicate the skills list.
-            skills_lower = {s.lower() for s in skills}
-            optional = [t for t in _clean(data.get("optional_terms")) if t.lower() not in skills_lower]
-            return {"will_add_skills": skills, "optional_terms": optional}
-        except litellm.Timeout:
-            raise ValueError("Analysis took too long. Try again.")
-        except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                time.sleep(15 * (attempt + 1))
-                continue
-            raise
+                def _clean(items):
+                    seen, out = set(), []
+                    for s in items or []:
+                        s = (s or "").strip()
+                        if s and s.lower() not in seen:
+                            seen.add(s.lower())
+                            out.append(s)
+                    return out
+
+                skills = _clean(data.get("will_add_skills"))
+                # Optional terms must not duplicate the skills list.
+                skills_lower = {s.lower() for s in skills}
+                optional = [t for t in _clean(data.get("optional_terms")) if t.lower() not in skills_lower]
+                return {"will_add_skills": skills, "optional_terms": optional}
+            except litellm.Timeout:
+                last_error = ValueError("Analysis took too long. Try again.")
+                break
+            except Exception as e:
+                last_error = e
+                if "429" in str(e) and attempt < 1:
+                    time.sleep(3)
+                    continue
+                # If model is decommissioned / not found, break inner loop to try next fallback model
+                break
+
+    if last_error:
+        raise last_error
+    raise ValueError("Could not analyze the JD. Please try again.")

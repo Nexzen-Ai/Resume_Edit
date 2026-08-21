@@ -96,19 +96,21 @@ def request_upgrade(body: UpgradeRequestBody, user: dict = Depends(current_user)
 
 @router.delete("/{resume_id}")
 def delete_resume(resume_id: str, user: dict = Depends(current_user)):
-    # A resume is permanent for normal users (one upload, many JDs). Only an
-    # admin can delete it. Users wanting another resume must upgrade.
-    if not user.get("is_admin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Your resume can't be deleted. To add more resumes, upgrade your account.",
-        )
-
     result = supabase.table("resumes").select("*").eq("id", resume_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Resume not found")
 
     resume = result.data[0]
-    supabase.storage.from_("resumes").remove([resume["storage_path"]])
+    # Allow user to delete their own resume, or admin to delete any resume
+    if resume["user_id"] != user["id"] and not user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to delete this resume.",
+        )
+
+    try:
+        supabase.storage.from_("resumes").remove([resume["storage_path"]])
+    except Exception:
+        pass
     supabase.table("resumes").delete().eq("id", resume_id).execute()
-    return {"message": "Deleted"}
+    return {"message": "Resume deleted successfully"}
