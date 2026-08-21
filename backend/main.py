@@ -32,6 +32,16 @@ app.include_router(interview.router)
 app.include_router(ats.router)
 
 
+@app.get("/")
+def root():
+    return {
+        "name": "NexCV Engine API",
+        "version": "2.0.0",
+        "status": "online",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
