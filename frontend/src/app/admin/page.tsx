@@ -214,7 +214,7 @@ export default function AdminPage() {
               ))}
             </div>
           </div>
-        )}        )}
+        )}
 
         <input
           value={search}
