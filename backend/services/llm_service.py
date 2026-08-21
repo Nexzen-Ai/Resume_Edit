@@ -121,11 +121,12 @@ Return JSON matching this schema exactly:
 company/title must exactly match resume text."""
 
     models_to_try = [
-        settings.llm_model,
+        settings.effective_llm_model,
         "groq/llama-3.1-70b-versatile",
         "groq/llama3-70b-8192",
         "groq/llama-3.1-8b-instant",
     ]
+    models_to_try = [m for m in models_to_try if "llama-3.3-70b-versatile" not in m]
     seen_m = set()
     models_to_try = [m for m in models_to_try if not (m in seen_m or seen_m.add(m))]
 
@@ -252,11 +253,12 @@ def analyze_jd_preview(resume_text: str, job_description: str) -> dict:
     )
 
     models_to_try = [
-        settings.llm_model,
+        settings.effective_llm_model,
         "groq/llama-3.1-70b-versatile",
         "groq/llama3-70b-8192",
         "groq/llama-3.1-8b-instant",
     ]
+    models_to_try = [m for m in models_to_try if "llama-3.3-70b-versatile" not in m]
     # Remove duplicates preserving order
     seen_m = set()
     models_to_try = [m for m in models_to_try if not (m in seen_m or seen_m.add(m))]

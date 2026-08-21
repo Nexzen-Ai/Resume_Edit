@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     smtp_from: str = ""
 
     @property
+    def effective_llm_model(self) -> str:
+        if "llama-3.3-70b-versatile" in self.llm_model:
+            return "groq/llama-3.1-70b-versatile"
+        return self.llm_model
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
