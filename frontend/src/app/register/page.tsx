@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Brand from "@/components/Brand";
 import api from "@/lib/api";
@@ -10,6 +10,36 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
+  const [resendCooldown, setResendCooldown] = useState(30); // Start 30s countdown after register
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (done && resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [done, resendCooldown]);
+
+  async function handleResendEmail() {
+    if (!form.email) return;
+    setResendLoading(true);
+    setResendMsg("");
+    try {
+      const res = await api.post("/auth/resend-verification", { email: form.email });
+      setResendMsg(res.data.message || "Verification link sent! Check your inbox.");
+      setResendCooldown(30);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setResendMsg(detail || "Could not resend verification email.");
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError("");
@@ -18,6 +48,7 @@ export default function RegisterPage() {
     try {
       await api.post("/auth/register", form);
       setDone(true);   // verification email sent — no auto-login
+      setResendCooldown(30);
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       if (Array.isArray(detail)) {
@@ -60,12 +91,37 @@ export default function RegisterPage() {
           <p className="text-sm mb-7" style={{ color: "var(--muted-light)" }}>Start tailoring your resume with AI</p>
 
           {done ? (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="p-4 rounded-xl text-sm border" style={{
                 background: "rgba(0,229,160,0.08)", borderColor: "rgba(0,229,160,0.25)", color: "var(--success)",
               }}>
                 Account created. We sent a verification link to <b>{form.email}</b>. Click it, then sign in.
               </div>
+
+              {resendMsg && (
+                <div className="p-3 rounded-xl text-xs border text-cyan-400 bg-cyan-950/40 border-cyan-500/30">
+                  {resendMsg}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleResendEmail}
+                disabled={resendCooldown > 0 || resendLoading}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold border transition-all cursor-pointer disabled:opacity-50"
+                style={{
+                  background: resendCooldown > 0 ? "rgba(255,255,255,0.04)" : "rgba(0,200,255,0.12)",
+                  borderColor: resendCooldown > 0 ? "var(--border)" : "rgba(0,200,255,0.3)",
+                  color: resendCooldown > 0 ? "var(--muted-light)" : "var(--accent)",
+                }}
+              >
+                {resendLoading
+                  ? "Resending..."
+                  : resendCooldown > 0
+                  ? `Resend email in ${resendCooldown}s`
+                  : "📩 Resend Verification Link"}
+              </button>
+
               <Link href="/login" className="block text-center w-full py-3 rounded-xl text-sm font-semibold"
                 style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)", color: "#fff" }}>
                 Go to Sign in

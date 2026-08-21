@@ -94,6 +94,28 @@ def register_user(email: str, password: str, full_name: str) -> dict:
     return {"email": email, "full_name": full_name, "verification_token": token}
 
 
+def resend_verification_user(email: str) -> dict:
+    """Find account by email and generate/return a verification token if unverified."""
+    result = supabase.table("users").select("*").eq("email", email).execute()
+    if not result.data:
+        raise ValueError("No account registered with this email.")
+
+    user = result.data[0]
+    if user.get("email_verified", False):
+        raise ValueError("Your email is already verified. You can sign in now.")
+
+    token = user.get("verification_token")
+    if not token:
+        token = str(uuid.uuid4())
+        supabase.table("users").update({"verification_token": token}).eq("id", user["id"]).execute()
+
+    return {
+        "email": user["email"],
+        "full_name": user.get("full_name", "User"),
+        "verification_token": token,
+    }
+
+
 def update_profile(user_id: str, full_name: str = None,
                    current_password: str = None, new_password: str = None) -> str:
     """Update name and/or password. Email is never changeable. Returns the name."""

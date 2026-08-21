@@ -2,8 +2,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from models.schemas import UserRegister, UserLogin, TokenResponse, RegisterResponse, ProfileUpdate
-from services.auth_service import register_user, login_user, get_current_user, verify_email_token, update_profile
+from models.schemas import UserRegister, UserLogin, TokenResponse, RegisterResponse, ProfileUpdate, ResendVerificationRequest
+from services.auth_service import register_user, login_user, get_current_user, verify_email_token, update_profile, resend_verification_user
 from services.email_service import send_verification_email
 from ratelimit import limiter
 from config import settings
@@ -37,6 +37,17 @@ def register(request: Request, body: UserRegister):
         message="Account created. Check your email and verify it before logging in.",
         email=result["email"],
     )
+
+
+@router.post("/resend-verification")
+@limiter.limit("5/minute")
+def resend_verification(request: Request, body: ResendVerificationRequest):
+    try:
+        res = resend_verification_user(body.email)
+        send_verification_email(res["email"], res["full_name"], res["verification_token"])
+        return {"message": "Verification link sent! Please check your email inbox."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/verify")

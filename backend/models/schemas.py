@@ -25,6 +25,10 @@ class UserRegister(BaseModel):
         return v.strip()
 
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
