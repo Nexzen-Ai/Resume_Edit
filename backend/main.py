@@ -5,11 +5,11 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from config import settings
 from ratelimit import limiter
-from routers import auth, resume, edit, admin
+from routers import auth, resume, edit, admin, credits, assessment, verification, interview, ats
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-app = FastAPI(title="Resume Tailor API", version="1.0.0")
+app = FastAPI(title="NexCV Engine API", version="2.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -25,6 +25,11 @@ app.include_router(auth.router)
 app.include_router(resume.router)
 app.include_router(edit.router)
 app.include_router(admin.router)
+app.include_router(credits.router)
+app.include_router(assessment.router)
+app.include_router(verification.router)
+app.include_router(interview.router)
+app.include_router(ats.router)
 
 
 @app.get("/health")

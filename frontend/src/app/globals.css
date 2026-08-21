@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050a18;
-  --foreground: #e8edf5;
-  --card: #0c1428;
-  --card-hover: #111d38;
-  --border: #1a2a4a;
-  --border-bright: #1e3a6e;
+  --background: #030712;
+  --foreground: #f8fafc;
+  --card: #0b0f19;
+  --card-hover: #111827;
+  --border: #1e293b;
+  --border-bright: #334155;
   --accent: #00c8ff;
   --accent-dim: rgba(0, 200, 255, 0.12);
   --accent-glow: rgba(0, 200, 255, 0.25);
-  --muted: #4a6080;
-  --muted-light: #7a90aa;
+  --muted: #64748b;
+  --muted-light: #94a3b8;
   --success: #00e5a0;
   --error: #ff4d6d;
 }
@@ -27,9 +27,21 @@ body {
 
 ::selection { background: var(--accent-dim); color: var(--accent); }
 
+.glow-text-cyan {
+  text-shadow: 0 0 25px rgba(0, 200, 255, 0.5);
+}
+
+.glow-text-purple {
+  text-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
+}
+
+.glow-border {
+  box-shadow: 0 0 30px rgba(0, 200, 255, 0.15);
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #0c1428 inset !important;
-  -webkit-text-fill-color: #e8edf5 !important;
-  caret-color: #e8edf5;
+  -webkit-box-shadow: 0 0 0 1000px #0b0f19 inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc;
 }

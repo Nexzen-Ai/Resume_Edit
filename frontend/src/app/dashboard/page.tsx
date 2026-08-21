@@ -253,16 +253,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      <main className="relative max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <main className="relative max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+            <h1 className="text-xl sm:text-2xl font-bold" style={{ color: "var(--foreground)" }}>
               Hello, <span style={{ color: "var(--accent)" }}>{user?.full_name?.split(" ")[0]}</span>
             </h1>
-            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Upload resume · paste JD · download tailored DOCX</p>
+            <p className="text-xs sm:text-sm mt-1" style={{ color: "var(--muted)" }}>Upload resume · paste JD · download tailored DOCX</p>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,200,255,0.2)" }}>
+          <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl" style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,200,255,0.2)" }}>
             <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--accent)" }} />
             <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>AI Ready</span>
           </div>
@@ -532,23 +532,23 @@ export default function Dashboard() {
               {history.map((job) => (
                 <div key={job.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
                   <div
-                    className="flex items-center gap-3 p-4 cursor-pointer transition-colors"
+                    className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 p-3.5 sm:p-4 cursor-pointer transition-colors"
                     style={{ background: "rgba(255,255,255,0.02)" }}
                     onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
                   >
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--success)" }} />
-                    <div className="flex-1 min-w-0">
+                    <div className="w-2 h-2 rounded-full shrink-0 hidden xs:block" style={{ background: "var(--success)" }} />
+                    <div className="flex-1 min-w-[140px]">
                       <p className="text-sm font-medium text-white">Tailored resume</p>
                       <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{fmt(job.created_at)}</p>
                     </div>
                     {job.added_skills?.length > 0 && (
-                      <span className="text-xs px-2 py-0.5 rounded-full hidden sm:block" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>
+                      <span className="text-xs px-2 py-0.5 rounded-full hidden md:block" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>
                         +{job.added_skills.length} skills
                       </span>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); downloadJob(job.id); }}
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ml-auto sm:ml-0 cursor-pointer shrink-0"
                       style={{ background: "linear-gradient(135deg, #00c8ff, #0066ff)", color: "#fff" }}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
